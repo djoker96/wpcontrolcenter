@@ -31,6 +31,7 @@ interface PluginInfo {
   versionLatest: string;
   isActive: boolean;
   updateAvailable: boolean;
+  autoUpdateEnabled?: boolean;
 }
 
 interface ThemeInfo {
