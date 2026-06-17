@@ -1,0 +1,519 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum EnvironmentType {
+  PRODUCTION
+  STAGING
+  DEVELOPMENT
+}
+
+enum SiteStatus {
+  ACTIVE
+  DISABLED
+  ARCHIVED
+}
+
+enum ConnectionStatus {
+  PENDING
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+enum JobType {
+  REGISTER_SITE
+  RESYNC_SITE
+  SYNC_SYSTEM_INFO
+  SYNC_PLUGINS
+  SYNC_THEMES
+  SYNC_CORE
+  UPDATE_CORE
+  UPDATE_PLUGIN
+  UPDATE_THEME
+  ACTIVATE_PLUGIN
+  DEACTIVATE_PLUGIN
+  INSTALL_PLUGIN
+  DELETE_PLUGIN
+  DELETE_THEME
+  TOGGLE_MAINTENANCE
+  CLEAR_CACHE
+  OPTIMIZE_DATABASE
+  UPDATE_ROBOTS_TXT
+  UPDATE_HTACCESS
+  UPDATE_PHP_CONFIG
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELED
+  TIMED_OUT
+}
+
+enum JobTargetType {
+  SITE
+  CORE
+  PLUGIN
+  THEME
+  CONFIG
+  CACHE
+  DATABASE
+}
+
+enum IncidentType {
+  UPTIME
+  RESPONSE_TIME
+  CONNECTION
+}
+
+enum IncidentSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  RESOLVED
+  MUTED
+}
+
+enum NotificationChannelType {
+  EMAIL
+  TELEGRAM
+  SLACK
+  DISCORD
+  WEBHOOK
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum IntegrationProvider {
+  GOOGLE
+}
+
+enum IntegrationStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+  ERROR
+}
+
+enum AnalyticsSource {
+  GA4
+  GSC
+}
+
+enum AuditResult {
+  SUCCESS
+  FAILURE
+  PARTIAL
+}
+
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+  DEBUG
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  fullName     String?    @map("full_name")
+  role         UserRole   @default(ADMIN)
+  isActive     Boolean    @default(true) @map("is_active")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  initiatedJobs          Job[]                 @relation("JobsInitiatedByUser")
+  auditLogs              AuditLog[]
+  maintenanceSnapshots   MaintenanceSnapshot[]
+
+  @@map("users")
+}
+
+model Site {
+  id                 String            @id @default(cuid())
+  name               String
+  domain             String            @unique
+  siteUrl            String            @map("site_url")
+  environment        EnvironmentType   @default(PRODUCTION)
+  wpVersion          String?           @map("wp_version")
+  phpVersion         String?           @map("php_version")
+  wpAgentVersion     String?           @map("wp_agent_version")
+  timezone           String?
+  status             SiteStatus        @default(ACTIVE)
+  connectionStatus   ConnectionStatus  @default(PENDING) @map("connection_status")
+  maintenanceMode    Boolean           @default(false) @map("maintenance_mode")
+  ga4PropertyId      String?           @map("ga4_property_id")
+  gscSiteUrl         String?           @map("gsc_site_url")
+  notes              String?
+  lastSeenAt         DateTime?         @map("last_seen_at")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  credential         SiteCredential?
+  setting            SiteSetting?
+  plugins            Plugin[]
+  themes             Theme[]
+  coreVersion        CoreVersion?
+  jobs               Job[]
+  uptimeChecks       UptimeCheck[]
+  incidents          Incident[]
+  analyticsDaily     AnalyticsDaily[]
+  topPagesDaily      TopPageDaily[]
+  auditLogs          AuditLog[]
+  notificationEvents NotificationEvent[]
+  maintenanceSnapshots MaintenanceSnapshot[]
+  integrations       SiteIntegration[]
+
+  @@index([status])
+  @@index([connectionStatus])
+  @@map("sites")
+}
+
+model SiteCredential {
+  id                       String   @id @default(cuid())
+  siteId                   String   @unique @map("site_id")
+  publicKey                String   @map("public_key")
+  secretKeyEncrypted       String   @map("secret_key_encrypted")
+  connectionTokenEncrypted String?  @map("connection_token_encrypted")
+  lastRotatedAt            DateTime? @map("last_rotated_at")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("site_credentials")
+}
+
+model SiteSetting {
+  id                      String   @id @default(cuid())
+  siteId                  String   @unique @map("site_id")
+  heartbeatIntervalMinutes Int     @default(5) @map("heartbeat_interval_minutes")
+  uptimeCheckEnabled      Boolean  @default(true) @map("uptime_check_enabled")
+  analyticsSyncEnabled    Boolean  @default(true) @map("analytics_sync_enabled")
+  updateWindowStart       String?  @map("update_window_start")
+  updateWindowEnd         String?  @map("update_window_end")
+  allowPluginInstall      Boolean  @default(true) @map("allow_plugin_install")
+  allowPluginDelete       Boolean  @default(true) @map("allow_plugin_delete")
+  allowThemeDelete        Boolean  @default(true) @map("allow_theme_delete")
+  allowFileEdit           Boolean  @default(true) @map("allow_file_edit")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("site_settings")
+}
+
+model Plugin {
+  id                String   @id @default(cuid())
+  siteId            String   @map("site_id")
+  slug              String
+  name              String
+  versionInstalled  String   @map("version_installed")
+  versionLatest     String?  @map("version_latest")
+  isActive          Boolean  @default(false) @map("is_active")
+  isPremium         Boolean  @default(false) @map("is_premium")
+  autoUpdateEnabled Boolean  @default(false) @map("auto_update_enabled")
+  updateAvailable   Boolean  @default(false) @map("update_available")
+  sourceType        String?  @map("source_type")
+  installedAt       DateTime? @map("installed_at")
+  lastSyncedAt      DateTime? @map("last_synced_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, slug])
+  @@index([siteId, updateAvailable])
+  @@map("plugins")
+}
+
+model Theme {
+  id               String   @id @default(cuid())
+  siteId           String   @map("site_id")
+  slug             String
+  name             String
+  versionInstalled String   @map("version_installed")
+  versionLatest    String?  @map("version_latest")
+  isActive         Boolean  @default(false) @map("is_active")
+  updateAvailable  Boolean  @default(false) @map("update_available")
+  lastSyncedAt     DateTime? @map("last_synced_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, slug])
+  @@index([siteId, updateAvailable])
+  @@map("themes")
+}
+
+model CoreVersion {
+  id               String   @id @default(cuid())
+  siteId           String   @unique @map("site_id")
+  versionInstalled String   @map("version_installed")
+  versionLatest    String?  @map("version_latest")
+  updateAvailable  Boolean  @default(false) @map("update_available")
+  lastSyncedAt     DateTime? @map("last_synced_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("core_versions")
+}
+
+model Job {
+  id                String        @id @default(cuid())
+  siteId            String        @map("site_id")
+  jobType           JobType       @map("job_type")
+  targetType        JobTargetType @map("target_type")
+  targetSlug        String?       @map("target_slug")
+  payloadJson       Json?         @map("payload_json")
+  status            JobStatus     @default(QUEUED)
+  initiatedByUserId String?       @map("initiated_by_user_id")
+  queuedAt          DateTime?     @map("queued_at")
+  startedAt         DateTime?     @map("started_at")
+  endedAt           DateTime?     @map("ended_at")
+  retryCount        Int           @default(0) @map("retry_count")
+  errorMessage      String?       @map("error_message")
+  resultJson        Json?         @map("result_json")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  site            Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  initiatedByUser User?     @relation("JobsInitiatedByUser", fields: [initiatedByUserId], references: [id], onDelete: SetNull)
+  logs            JobLog[]
+
+  @@index([siteId, status])
+  @@index([jobType, status])
+  @@map("jobs")
+}
+
+model JobLog {
+  id          String   @id @default(cuid())
+  jobId       String   @map("job_id")
+  level       LogLevel @default(INFO)
+  message     String
+  contextJson Json?    @map("context_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+  @@map("job_logs")
+}
+
+model UptimeCheck {
+  id             String   @id @default(cuid())
+  siteId         String   @map("site_id")
+  checkedAt      DateTime @default(now()) @map("checked_at")
+  statusCode     Int?     @map("status_code")
+  responseTimeMs Int?     @map("response_time_ms")
+  isUp           Boolean  @map("is_up")
+  errorMessage   String?  @map("error_message")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, checkedAt])
+  @@map("uptime_checks")
+}
+
+model Incident {
+  id           String           @id @default(cuid())
+  siteId       String           @map("site_id")
+  incidentType IncidentType     @map("incident_type")
+  severity     IncidentSeverity @default(WARNING)
+  startedAt    DateTime         @map("started_at")
+  endedAt      DateTime?        @map("ended_at")
+  status       IncidentStatus   @default(OPEN)
+  summary      String?
+  metadataJson Json?            @map("metadata_json")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  site               Site                @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  notificationEvents NotificationEvent[]
+
+  @@index([siteId, status])
+  @@index([startedAt])
+  @@map("incidents")
+}
+
+model AnalyticsDaily {
+  id          String          @id @default(cuid())
+  siteId      String          @map("site_id")
+  metricDate  DateTime        @db.Date @map("metric_date")
+  source      AnalyticsSource
+  sessions    Int?
+  users       Int?
+  pageviews   Int?
+  impressions Int?
+  clicks      Int?
+  ctr         Float?
+  avgPosition Float?          @map("avg_position")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, metricDate, source])
+  @@index([siteId, metricDate])
+  @@map("analytics_daily")
+}
+
+model TopPageDaily {
+  id          String          @id @default(cuid())
+  siteId      String          @map("site_id")
+  metricDate  DateTime        @db.Date @map("metric_date")
+  source      AnalyticsSource
+  pagePath    String          @map("page_path")
+  pageTitle   String?         @map("page_title")
+  sessions    Int?
+  pageviews   Int?
+  impressions Int?
+  clicks      Int?
+  ctr         Float?
+  avgPosition Float?          @map("avg_position")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, metricDate])
+  @@index([siteId, source])
+  @@map("top_pages_daily")
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  userId     String?     @map("user_id")
+  siteId     String?     @map("site_id")
+  action     String
+  entityType String?     @map("entity_type")
+  entityId   String?     @map("entity_id")
+  payloadJson Json?      @map("payload_json")
+  result     AuditResult @default(SUCCESS)
+  ipAddress  String?     @map("ip_address")
+  userAgent  String?     @map("user_agent")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  site Site? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  @@index([siteId, createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id          String                  @id @default(cuid())
+  channelType NotificationChannelType @map("channel_type")
+  destination String
+  isEnabled   Boolean                 @default(true) @map("is_enabled")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  updatedAt   DateTime                @updatedAt @map("updated_at")
+
+  events NotificationEvent[]
+
+  @@map("notifications")
+}
+
+model NotificationEvent {
+  id          String                     @id @default(cuid())
+  siteId       String?                   @map("site_id")
+  incidentId   String?                   @map("incident_id")
+  notificationId String?                 @map("notification_id")
+  eventType    String                    @map("event_type")
+  channelType  NotificationChannelType   @map("channel_type")
+  destination  String
+  status       NotificationDeliveryStatus @default(PENDING)
+  payloadJson  Json?                     @map("payload_json")
+  sentAt       DateTime?                 @map("sent_at")
+  createdAt    DateTime                  @default(now()) @map("created_at")
+  updatedAt    DateTime                  @updatedAt @map("updated_at")
+
+  site         Site?         @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  incident     Incident?     @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  notification Notification? @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+
+  @@index([siteId, createdAt])
+  @@index([incidentId])
+  @@map("notification_events")
+}
+
+model MaintenanceSnapshot {
+  id                String   @id @default(cuid())
+  siteId            String   @map("site_id")
+  robotsTxtContent  String?  @db.Text @map("robots_txt_content")
+  htaccessContent   String?  @db.Text @map("htaccess_content")
+  phpIniContent     String?  @db.Text @map("php_ini_content")
+  capturedAt        DateTime @default(now()) @map("captured_at")
+  createdByUserId   String?  @map("created_by_user_id")
+
+  site          Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdByUser User? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([siteId, capturedAt])
+  @@map("maintenance_snapshots")
+}
+
+model IntegrationAccount {
+  id                    String             @id @default(cuid())
+  provider              IntegrationProvider
+  accountEmail          String?            @map("account_email")
+  accessTokenEncrypted  String             @map("access_token_encrypted")
+  refreshTokenEncrypted String?            @map("refresh_token_encrypted")
+  expiresAt             DateTime?          @map("expires_at")
+  metadataJson          Json?              @map("metadata_json")
+  status                IntegrationStatus  @default(ACTIVE)
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  siteIntegrations SiteIntegration[]
+
+  @@map("integration_accounts")
+}
+
+model SiteIntegration {
+  id                     String            @id @default(cuid())
+  siteId                 String            @map("site_id")
+  integrationAccountId   String            @map("integration_account_id")
+  provider               IntegrationProvider
+  externalPropertyId     String?           @map("external_property_id")
+  externalSiteIdentifier String?           @map("external_site_identifier")
+  status                 IntegrationStatus @default(ACTIVE)
+  createdAt              DateTime          @default(now()) @map("created_at")
+  updatedAt              DateTime          @updatedAt @map("updated_at")
+
+  site               Site               @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  integrationAccount IntegrationAccount @relation(fields: [integrationAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, provider])
+  @@index([integrationAccountId])
+  @@map("site_integrations")
+}
