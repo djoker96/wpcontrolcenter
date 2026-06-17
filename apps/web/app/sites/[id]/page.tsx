@@ -21,7 +21,59 @@ interface SiteOverview {
   wpAgentVersion?: string;
   coreUpdateAvailable?: boolean;
   coreVersionLatest?: string | null;
+  ga4PropertyId?: string | null;
+  gscSiteUrl?: string | null;
 }
+
+interface Ga4Metric {
+  id: string;
+  siteId: string;
+  metricDate: string;
+  source: string;
+  sessions: number | null;
+  users: number | null;
+  pageviews: number | null;
+}
+
+interface GscMetric {
+  id: string;
+  siteId: string;
+  metricDate: string;
+  source: string;
+  clicks: number | null;
+  impressions: number | null;
+  ctr: number | null;
+  avgPosition: number | null;
+}
+
+interface TopPageMetric {
+  pagePath: string;
+  pageTitle: string | null;
+  pageviews: number;
+  sessions: number;
+  clicks: number;
+  impressions: number;
+}
+
+interface IntegrationAccount {
+  id: string;
+  provider: string;
+  accountEmail: string | null;
+  status: string;
+  createdAt: string;
+}
+
+interface Ga4Property {
+  id: string;
+  name: string;
+  accountName: string;
+}
+
+interface GscSite {
+  siteUrl: string;
+  permissionLevel: string;
+}
+
 
 interface PluginInfo {
   id: string;
@@ -96,6 +148,120 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   const [phpMemoryLimit, setPhpMemoryLimit] = useState("256M");
   const [pluginSlugToInstall, setPluginSlugToInstall] = useState("");
   const [actionRunning, setActionRunning] = useState(false);
+
+  // Analytics State
+  const [ga4AnalyticsData, setGa4AnalyticsData] = useState<Ga4Metric[]>([]);
+  const [gscAnalyticsData, setGscAnalyticsData] = useState<GscMetric[]>([]);
+  const [topPagesData, setTopPagesData] = useState<TopPageMetric[]>([]);
+  const [integrationAccounts, setIntegrationAccounts] = useState<IntegrationAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [availableProperties, setAvailableProperties] = useState<Ga4Property[]>([]);
+  const [availableGscSites, setAvailableGscSites] = useState<GscSite[]>([]);
+  const [selectedGa4PropertyId, setSelectedGa4PropertyId] = useState("");
+  const [selectedGscSiteUrl, setSelectedGscSiteUrl] = useState("");
+  const [mappingLoading, setMappingLoading] = useState(false);
+  const [analyticsRange, setAnalyticsRange] = useState(30);
+  const [isEditingConnection, setIsEditingConnection] = useState(false);
+
+  const handleMapSite = async () => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token || !selectedAccountId) return;
+
+    setMappingLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`http://localhost:3003/api/integrations/sites/${id}/map`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          accountId: selectedAccountId,
+          ga4PropertyId: selectedGa4PropertyId || null,
+          gscSiteIdentifier: selectedGscSiteUrl || null,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to link Google properties to site");
+      }
+
+      alert("Site mapped successfully!");
+      setIsEditingConnection(false);
+      await fetchData();
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Mapping failed";
+      setError(errorMsg);
+    } finally {
+      setMappingLoading(false);
+    }
+  };
+  useEffect(() => {
+    if (!selectedAccountId) return;
+    const fetchProperties = async () => {
+      const token = localStorage.getItem("wpcc_token");
+      if (!token) return;
+      try {
+        const res = await fetch(`http://localhost:3003/api/integrations/google/properties?accountId=${selectedAccountId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setAvailableProperties(json.ga4Properties || []);
+          setAvailableGscSites(json.gscSites || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch Google properties", err);
+      }
+    };
+    fetchProperties();
+  }, [selectedAccountId]);
+
+  const fetchAnalyticsTab = async (range = analyticsRange) => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+
+    try {
+      const accountsRes = await fetch("http://localhost:3003/api/integrations", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (accountsRes.ok) {
+        const json = await accountsRes.json();
+        const accountsList = json.data || [];
+        setIntegrationAccounts(accountsList);
+        if (accountsList.length > 0 && !selectedAccountId) {
+          setSelectedAccountId(accountsList[0].id);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load integration accounts", err);
+    }
+
+    if (overviewData?.ga4PropertyId || overviewData?.gscSiteUrl) {
+      try {
+        const analyticsRes = await fetch(`http://localhost:3003/api/analytics/sites/${id}?range=${range}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (analyticsRes.ok) {
+          const json = await analyticsRes.json();
+          setGa4AnalyticsData(json.ga4Data || []);
+          setGscAnalyticsData(json.gscData || []);
+          setTopPagesData(json.topPages || []);
+        }
+      } catch (err) {
+        console.error("Failed to load site analytics metrics", err);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "analytics") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchAnalyticsTab(analyticsRange);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, analyticsRange, overviewData?.ga4PropertyId, overviewData?.gscSiteUrl]);
 
   const triggerMaintenanceAction = async (action: string, payload: Record<string, unknown> = {}) => {
     const token = localStorage.getItem("wpcc_token");
@@ -335,6 +501,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
             { id: "core", label: "Core Version" },
             { id: "uptime", label: `Uptime & Incidents (${incidentsList.filter(i => i.status === "OPEN").length})` },
             { id: "maintenance", label: "Maintenance & Tools" },
+            { id: "analytics", label: "Analytics & SEO" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -750,8 +917,344 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             </div>
           )}
+
+          {activeTab === "analytics" && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              {/* Top Controls & Mapped Status */}
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-zinc-900 pb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white font-heading">Google Analytics & Search Console</h3>
+                  {overviewData?.ga4PropertyId || overviewData?.gscSiteUrl ? (
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Connected to GA4 Property: <code className="text-violet-400 font-semibold">{overviewData.ga4PropertyId || "None"}</code> | GSC Site: <code className="text-violet-400 font-semibold">{overviewData.gscSiteUrl || "None"}</code>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-zinc-500 mt-1">
+                      This site is not connected to Google services. Use the configuration form below to map it.
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-500 font-medium">Time Range:</span>
+                    <select
+                      value={analyticsRange}
+                      onChange={(e) => setAnalyticsRange(Number(e.target.value))}
+                      className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-white outline-none focus:border-violet-500 transition"
+                    >
+                      <option value={7}>Last 7 Days</option>
+                      <option value={30}>Last 30 Days</option>
+                      <option value={90}>Last 90 Days</option>
+                    </select>
+                  </div>
+
+                  {(overviewData?.ga4PropertyId || overviewData?.gscSiteUrl) && !isEditingConnection && (
+                    <Button
+                      onClick={() => {
+                        setIsEditingConnection(true);
+                        setSelectedGa4PropertyId(overviewData.ga4PropertyId || "");
+                        setSelectedGscSiteUrl(overviewData.gscSiteUrl || "");
+                      }}
+                      className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 text-zinc-300 font-semibold text-xs px-3 py-1.5"
+                    >
+                      Configure Connection
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Connection Form (if not mapped or if editing connection) */}
+              {(!overviewData?.ga4PropertyId && !overviewData?.gscSiteUrl) || isEditingConnection ? (
+                <div className="rounded-xl border border-zinc-900 bg-zinc-950/40 p-6 space-y-6 max-w-2xl mx-auto backdrop-blur-md">
+                  <div className="space-y-1">
+                    <h4 className="text-md font-bold text-white">Link Google Properties</h4>
+                    <p className="text-xs text-zinc-500">
+                      Select a connected Google Account to map this website with a Google Analytics 4 Property and Google Search Console Site.
+                    </p>
+                  </div>
+
+                  {integrationAccounts.length === 0 ? (
+                    <div className="rounded-lg border border-yellow-950/20 bg-yellow-950/5 p-6 text-center space-y-4">
+                      <p className="text-xs text-yellow-500">No Google integration accounts connected.</p>
+                      <Link href="/integrations">
+                        <Button className="bg-violet-600 hover:bg-violet-500 text-xs px-4 py-2 text-white">
+                          Manage Integrations
+                        </Button>
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Account Selection */}
+                      <div className="space-y-2">
+                        <label className="text-xs text-zinc-400 font-semibold block">Google Account</label>
+                        <select
+                          value={selectedAccountId}
+                          onChange={(e) => setSelectedAccountId(e.target.value)}
+                          className="w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2.5 text-sm text-white outline-none focus:border-violet-500 transition"
+                        >
+                          <option value="">-- Select Account --</option>
+                          {integrationAccounts.map((acc) => (
+                            <option key={acc.id} value={acc.id}>
+                              {acc.accountEmail} ({acc.provider})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {selectedAccountId && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* GA4 Property Selection */}
+                          <div className="space-y-2">
+                            <label className="text-xs text-zinc-400 font-semibold block">Google Analytics 4 Property</label>
+                            <select
+                              value={selectedGa4PropertyId}
+                              onChange={(e) => setSelectedGa4PropertyId(e.target.value)}
+                              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2.5 text-sm text-white outline-none focus:border-violet-500 transition"
+                            >
+                              <option value="">-- Do not link GA4 --</option>
+                              {availableProperties.map((prop) => (
+                                <option key={prop.id} value={prop.id}>
+                                  {prop.name} ({prop.id})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* GSC Site Selection */}
+                          <div className="space-y-2">
+                            <label className="text-xs text-zinc-400 font-semibold block">Google Search Console Site</label>
+                            <select
+                              value={selectedGscSiteUrl}
+                              onChange={(e) => setSelectedGscSiteUrl(e.target.value)}
+                              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2.5 text-sm text-white outline-none focus:border-violet-500 transition"
+                            >
+                              <option value="">-- Do not link GSC --</option>
+                              {availableGscSites.map((site) => (
+                                <option key={site.siteUrl} value={site.siteUrl}>
+                                  {site.siteUrl}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3 pt-2">
+                        <Button
+                          onClick={handleMapSite}
+                          disabled={mappingLoading || !selectedAccountId}
+                          className="flex-1 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-semibold py-2.5"
+                        >
+                          {mappingLoading ? "Saving Mapping..." : "Save Property Connections"}
+                        </Button>
+                        {isEditingConnection && (
+                          <Button
+                            onClick={() => setIsEditingConnection(false)}
+                            className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 text-xs px-4"
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Connected & Analytics Metrics Display */
+                <div className="space-y-8">
+                  {/* KPI Cards Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+                    {/* Sessions */}
+                    <div className="rounded-xl border border-zinc-900 bg-zinc-900/10 p-4 backdrop-blur-sm">
+                      <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">GA4 Sessions</div>
+                      <div className="text-2xl font-extrabold text-white mt-1 font-heading">
+                        {ga4AnalyticsData.reduce((sum, d) => sum + (d.sessions || 0), 0).toLocaleString()}
+                      </div>
+                    </div>
+                    {/* Active Users */}
+                    <div className="rounded-xl border border-zinc-900 bg-zinc-900/10 p-4 backdrop-blur-sm">
+                      <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">GA4 Active Users</div>
+                      <div className="text-2xl font-extrabold text-emerald-400 mt-1 font-heading">
+                        {ga4AnalyticsData.reduce((sum, d) => sum + (d.users || 0), 0).toLocaleString()}
+                      </div>
+                    </div>
+                    {/* Pageviews */}
+                    <div className="rounded-xl border border-zinc-900 bg-zinc-900/10 p-4 backdrop-blur-sm">
+                      <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">GA4 Pageviews</div>
+                      <div className="text-2xl font-extrabold text-white mt-1 font-heading">
+                        {ga4AnalyticsData.reduce((sum, d) => sum + (d.pageviews || 0), 0).toLocaleString()}
+                      </div>
+                    </div>
+                    {/* Clicks */}
+                    <div className="rounded-xl border border-zinc-900 bg-zinc-900/10 p-4 backdrop-blur-sm">
+                      <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">GSC Clicks</div>
+                      <div className="text-2xl font-extrabold text-white mt-1 font-heading">
+                        {gscAnalyticsData.reduce((sum, d) => sum + (d.clicks || 0), 0).toLocaleString()}
+                      </div>
+                    </div>
+                    {/* Impressions */}
+                    <div className="rounded-xl border border-zinc-900 bg-zinc-900/10 p-4 backdrop-blur-sm">
+                      <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">GSC Impressions</div>
+                      <div className="text-2xl font-extrabold text-fuchsia-400 mt-1 font-heading">
+                        {gscAnalyticsData.reduce((sum, d) => sum + (d.impressions || 0), 0).toLocaleString()}
+                      </div>
+                    </div>
+                    {/* Avg Position */}
+                    <div className="rounded-xl border border-zinc-900 bg-zinc-900/10 p-4 backdrop-blur-sm">
+                      <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">Avg Position</div>
+                      <div className="text-2xl font-extrabold text-yellow-500 mt-1 font-heading">
+                        {gscAnalyticsData.length > 0
+                          ? (gscAnalyticsData.reduce((sum, d) => sum + (d.avgPosition || 0), 0) / gscAnalyticsData.length).toFixed(1)
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Graphs section */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* GA4 Traffic Chart */}
+                    <div className="rounded-xl border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-sm font-semibold text-white">GA4 Traffic Trends</h4>
+                        <div className="flex gap-4 text-xs font-medium">
+                          <span className="flex items-center gap-1.5 text-violet-400">
+                            <span className="h-2 w-2 rounded-full bg-violet-500" />
+                            Sessions
+                          </span>
+                          <span className="flex items-center gap-1.5 text-emerald-400">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                            Active Users
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-44 relative bg-zinc-900/20 rounded-lg p-2 border border-zinc-900">
+                        <div className="absolute inset-0 opacity-40">
+                          <MiniLineChart data={ga4AnalyticsData} dataKey="sessions" color="#8b5cf6" strokeWidth={2} />
+                        </div>
+                        <div className="absolute inset-0">
+                          <MiniLineChart data={ga4AnalyticsData} dataKey="users" color="#10b981" strokeWidth={1.5} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* GSC Performance Chart */}
+                    <div className="rounded-xl border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-sm font-semibold text-white">Google Search Console Performance</h4>
+                        <div className="flex gap-4 text-xs font-medium">
+                          <span className="flex items-center gap-1.5 text-white">
+                            <span className="h-2 w-2 rounded-full bg-white" />
+                            Clicks
+                          </span>
+                          <span className="flex items-center gap-1.5 text-fuchsia-400">
+                            <span className="h-2 w-2 rounded-full bg-fuchsia-500" />
+                            Impressions
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-44 relative bg-zinc-900/20 rounded-lg p-2 border border-zinc-900">
+                        <div className="absolute inset-0 opacity-40">
+                          <MiniLineChart data={gscAnalyticsData} dataKey="impressions" color="#d946ef" strokeWidth={1.5} />
+                        </div>
+                        <div className="absolute inset-0">
+                          <MiniLineChart data={gscAnalyticsData} dataKey="clicks" color="#ffffff" strokeWidth={2} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Top Pages Table */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Top Visited Pages (GA4 & GSC Summary)</h4>
+                    {topPagesData.length === 0 ? (
+                      <div className="rounded-lg border border-zinc-900 bg-zinc-950/40 p-6 text-center text-zinc-500 text-sm">
+                        No page metrics synced yet.
+                      </div>
+                    ) : (
+                      <div className="overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900/10 backdrop-blur-sm">
+                        <table className="w-full border-collapse text-left text-sm">
+                          <thead>
+                            <tr className="border-b border-zinc-900 bg-zinc-900/40 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                              <th className="p-4">Page Path</th>
+                              <th className="p-4">Page Title</th>
+                              <th className="p-4 text-right">GA4 Pageviews</th>
+                              <th className="p-4 text-right">GA4 Sessions</th>
+                              <th className="p-4 text-right">GSC Clicks</th>
+                              <th className="p-4 text-right">GSC Impressions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-900">
+                            {topPagesData.map((page, index) => (
+                              <tr key={index} className="hover:bg-zinc-900/30 transition duration-150">
+                                <td className="p-4 font-mono text-zinc-300 break-all select-all text-xs">{page.pagePath}</td>
+                                <td className="p-4 text-white truncate max-w-xs text-xs">{page.pageTitle || "—"}</td>
+                                <td className="p-4 text-right text-emerald-400 font-semibold font-mono text-xs">{page.pageviews.toLocaleString()}</td>
+                                <td className="p-4 text-right text-zinc-300 font-mono text-xs">{page.sessions.toLocaleString()}</td>
+                                <td className="p-4 text-right text-white font-semibold font-mono text-xs">{page.clicks.toLocaleString()}</td>
+                                <td className="p-4 text-right text-fuchsia-400 font-mono text-xs">{page.impressions.toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </main>
     </div>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function MiniLineChart({ data, dataKey, color, strokeWidth = 2 }: { data: any[], dataKey: string, color: string, strokeWidth?: number }) {
+  if (!data || data.length === 0) {
+    return <div className="h-full flex items-center justify-center text-xs text-zinc-600 font-medium">No data points</div>;
+  }
+  
+  const width = 500;
+  const height = 150;
+  const paddingX = 15;
+  const paddingY = 15;
+  
+  const maxVal = Math.max(...data.map(d => Number(d[dataKey]) || 0), 1);
+  const minVal = 0;
+  
+  const points = data.map((d, i) => {
+    const x = paddingX + (i / (data.length - 1)) * (width - paddingX * 2);
+    const val = Number(d[dataKey]) || 0;
+    const y = height - paddingY - ((val - minVal) / (maxVal - minVal)) * (height - paddingY * 2);
+    return `${x},${y}`;
+  }).join(" ");
+
+  return (
+    <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={`gradient-${dataKey}-${color.replace("#", "")}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.25} />
+          <stop offset="100%" stopColor={color} stopOpacity={0.0} />
+        </linearGradient>
+      </defs>
+      {/* Dynamic Area Under Curve */}
+      {data.length > 1 && (
+        <polygon
+          points={`${paddingX},${height - paddingY} ${points} ${width - paddingX},${height - paddingY}`}
+          fill={`url(#gradient-${dataKey}-${color.replace("#", "")})`}
+        />
+      )}
+      {/* Path Line */}
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        points={points}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

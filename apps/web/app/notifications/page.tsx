@@ -21,7 +21,7 @@ interface NotificationEvent {
   status: 'PENDING' | 'SENT' | 'FAILED';
   sentAt: string | null;
   createdAt: string;
-  payloadJson?: any;
+  payloadJson?: Record<string, unknown> | null;
   site?: { name: string; domain: string } | null;
   incident?: { incidentType: string; severity: string; status: string } | null;
 }
@@ -180,7 +180,7 @@ function NotificationsContent() {
                 <label className="text-xs text-zinc-400 font-semibold">Channel Type</label>
                 <select
                   value={channelType}
-                  onChange={(e) => setChannelType(e.target.value as any)}
+                  onChange={(e) => setChannelType(e.target.value as NotificationChannel['channelType'])}
                   className="w-full rounded-lg border border-zinc-800 bg-zinc-900/80 p-2.5 text-sm text-white outline-none focus:border-violet-500 transition"
                 >
                   <option value="SLACK">Slack Webhook</option>
