@@ -1,13 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateSiteDto } from './dto/create-site.dto';
 import { UpdateSiteDto } from './dto/update-site.dto';
-import { encrypt } from '../../common/utils/crypto.utils';
-import { randomBytes } from 'node:crypto';
+import { encrypt, decrypt } from '../../common/utils/crypto.utils';
+import { randomBytes, createHmac } from 'node:crypto';
 
 @Injectable()
 export class SitesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(public readonly prisma: PrismaService) {}
 
   private getEncryptionKey(): string {
     return process.env.AGENT_ENCRYPTION_KEY || '6a66632c253d82a17cb0b51de38e8cb554c8651a24d852a35368a5436d4f9bf3';
@@ -159,5 +159,190 @@ export class SitesService {
       publicKey,
       secretKey,
     };
+  }
+
+  async resync(id: string) {
+    const site = await this.prisma.site.findUnique({
+      where: { id },
+      include: { credential: true },
+    });
+
+    if (!site) {
+      throw new NotFoundException(`Site with ID ${id} not found`);
+    }
+
+    if (site.connectionStatus !== 'CONNECTED' || !site.credential) {
+      throw new BadRequestException('Site is not connected or missing credentials');
+    }
+
+    const secretKey = decrypt(site.credential.secretKeyEncrypted, this.getEncryptionKey());
+    const method = 'POST';
+    const path = '/wpcc/v1/execute/sync-inventory';
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const bodyObj = {};
+    const bodyStr = JSON.stringify(bodyObj);
+
+    // Create signature
+    const message = `${method}|${path}|${timestamp}|${bodyStr}`;
+    const signature = createHmac('sha256', secretKey).update(message).digest('hex');
+
+    // Call WordPress Agent
+    const targetUrl = `${site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/sync-inventory`;
+    
+    try {
+      const response = await fetch(targetUrl, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wpcc-signature': signature,
+          'x-wpcc-timestamp': timestamp,
+        },
+        body: bodyStr,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Agent returned status ${response.status}`);
+      }
+
+      const responseBody = await response.json() as any;
+      if (!responseBody.success || !responseBody.data) {
+        throw new Error(responseBody.message || 'Agent sync failed');
+      }
+
+      const { systemInfo, plugins, themes, core } = responseBody.data;
+
+      // Update Site Table
+      await this.prisma.site.update({
+        where: { id },
+        data: {
+          wpVersion: systemInfo.wpVersion,
+          phpVersion: systemInfo.phpVersion,
+          wpAgentVersion: systemInfo.wpAgentVersion,
+          timezone: systemInfo.timezone,
+          lastSeenAt: new Date(),
+        },
+      });
+
+      // Upsert plugins
+      const activeSlugs = plugins.map((p: any) => p.slug);
+      for (const plugin of plugins) {
+        await this.prisma.plugin.upsert({
+          where: {
+            siteId_slug: {
+              siteId: id,
+              slug: plugin.slug,
+            },
+          },
+          update: {
+            name: plugin.name,
+            versionInstalled: plugin.versionInstalled,
+            versionLatest: plugin.versionLatest,
+            isActive: plugin.isActive,
+            updateAvailable: plugin.updateAvailable,
+            autoUpdateEnabled: plugin.autoUpdateEnabled,
+            lastSyncedAt: new Date(),
+          },
+          create: {
+            siteId: id,
+            slug: plugin.slug,
+            name: plugin.name,
+            versionInstalled: plugin.versionInstalled,
+            versionLatest: plugin.versionLatest,
+            isActive: plugin.isActive,
+            updateAvailable: plugin.updateAvailable,
+            autoUpdateEnabled: plugin.autoUpdateEnabled,
+            lastSyncedAt: new Date(),
+          },
+        });
+      }
+      // Delete uninstalled plugins
+      await this.prisma.plugin.deleteMany({
+        where: {
+          siteId: id,
+          slug: { notIn: activeSlugs },
+        },
+      });
+
+      // Upsert themes
+      const activeThemeSlugs = themes.map((t: any) => t.slug);
+      for (const theme of themes) {
+        await this.prisma.theme.upsert({
+          where: {
+            siteId_slug: {
+              siteId: id,
+              slug: theme.slug,
+            },
+          },
+          update: {
+            name: theme.name,
+            versionInstalled: theme.versionInstalled,
+            versionLatest: theme.versionLatest,
+            isActive: theme.isActive,
+            updateAvailable: theme.updateAvailable,
+            lastSyncedAt: new Date(),
+          },
+          create: {
+            siteId: id,
+            slug: theme.slug,
+            name: theme.name,
+            versionInstalled: theme.versionInstalled,
+            versionLatest: theme.versionLatest,
+            isActive: theme.isActive,
+            updateAvailable: theme.updateAvailable,
+            lastSyncedAt: new Date(),
+          },
+        });
+      }
+      // Delete uninstalled themes
+      await this.prisma.theme.deleteMany({
+        where: {
+          siteId: id,
+          slug: { notIn: activeThemeSlugs },
+        },
+      });
+
+      // Upsert core version
+      await this.prisma.coreVersion.upsert({
+        where: { siteId: id },
+        update: {
+          versionInstalled: core.versionInstalled,
+          versionLatest: core.versionLatest,
+          updateAvailable: core.updateAvailable,
+          lastSyncedAt: new Date(),
+        },
+        create: {
+          siteId: id,
+          versionInstalled: core.versionInstalled,
+          versionLatest: core.versionLatest,
+          updateAvailable: core.updateAvailable,
+          lastSyncedAt: new Date(),
+        },
+      });
+
+      // Log success audit event
+      await this.prisma.auditLog.create({
+        data: {
+          siteId: id,
+          action: 'site.resync',
+          entityType: 'site',
+          entityId: id,
+          result: 'SUCCESS',
+        },
+      });
+
+      return { success: true };
+    } catch (error) {
+      await this.prisma.auditLog.create({
+        data: {
+          siteId: id,
+          action: 'site.resync',
+          entityType: 'site',
+          entityId: id,
+          result: 'FAILURE',
+          payloadJson: { error: error.message },
+        },
+      });
+      throw error;
+    }
   }
 }

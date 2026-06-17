@@ -58,32 +58,77 @@ export class SitesController {
 
   @Post(':id/resync')
   @Roles(UserRole.ADMIN)
-  resync(@Param('id') id: string) {
-    return { siteId: id, jobId: 'job_resync_stub' };
+  async resync(@Param('id') id: string) {
+    return this.sitesService.resync(id);
   }
 
   @Get(':id/overview')
   @Roles(UserRole.ADMIN)
-  overview(@Param('id') id: string) {
-    return { siteId: id, summary: { pendingUpdates: 3, isUp: true } };
+  async overview(@Param('id') id: string) {
+    const site = await this.sitesService.findOne(id);
+    const [pluginsCount, activePluginsCount, pluginUpdatesAvailable] = await Promise.all([
+      this.sitesService.prisma.plugin.count({ where: { siteId: id } }),
+      this.sitesService.prisma.plugin.count({ where: { siteId: id, isActive: true } }),
+      this.sitesService.prisma.plugin.count({ where: { siteId: id, updateAvailable: true } }),
+    ]);
+
+    const [themesCount, activeThemeName, themeUpdatesAvailable] = await Promise.all([
+      this.sitesService.prisma.theme.count({ where: { siteId: id } }),
+      this.sitesService.prisma.theme.findFirst({ where: { siteId: id, isActive: true } }).then(t => t?.name || 'None'),
+      this.sitesService.prisma.theme.count({ where: { siteId: id, updateAvailable: true } }),
+    ]);
+
+    return {
+      siteId: id,
+      summary: {
+        name: site.name,
+        domain: site.domain,
+        siteUrl: site.siteUrl,
+        connectionStatus: site.connectionStatus,
+        lastSeenAt: site.lastSeenAt,
+        wpVersion: site.wpVersion,
+        phpVersion: site.phpVersion,
+        wpAgentVersion: site.wpAgentVersion,
+        timezone: site.timezone,
+        pluginsCount,
+        activePluginsCount,
+        pluginUpdatesAvailable,
+        themesCount,
+        activeThemeName,
+        themeUpdatesAvailable,
+        coreUpdateAvailable: site.coreVersion?.updateAvailable || false,
+        coreVersionLatest: site.coreVersion?.versionLatest || null,
+      },
+    };
   }
 
   @Get(':id/plugins')
   @Roles(UserRole.ADMIN)
-  plugins(@Param('id') id: string) {
-    return { siteId: id, data: [] };
+  async plugins(@Param('id') id: string) {
+    const data = await this.sitesService.prisma.plugin.findMany({
+      where: { siteId: id },
+      orderBy: { name: 'asc' },
+    });
+    return { siteId: id, data };
   }
 
   @Get(':id/themes')
   @Roles(UserRole.ADMIN)
-  themes(@Param('id') id: string) {
-    return { siteId: id, data: [] };
+  async themes(@Param('id') id: string) {
+    const data = await this.sitesService.prisma.theme.findMany({
+      where: { siteId: id },
+      orderBy: { name: 'asc' },
+    });
+    return { siteId: id, data };
   }
 
   @Get(':id/core')
   @Roles(UserRole.ADMIN)
-  core(@Param('id') id: string) {
-    return { siteId: id, versionInstalled: '6.5.5' };
+  async core(@Param('id') id: string) {
+    const data = await this.sitesService.prisma.coreVersion.findUnique({
+      where: { siteId: id },
+    });
+    return data || { versionInstalled: 'Unknown', updateAvailable: false };
   }
 
   @Get(':id/uptime')
