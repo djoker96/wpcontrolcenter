@@ -17,6 +17,8 @@ interface SiteOverview {
   activePluginsCount?: number;
   pluginUpdatesAvailable?: number;
   themeUpdatesAvailable?: number;
+  timezone?: string;
+  wpAgentVersion?: string;
 }
 
 interface PluginInfo {
