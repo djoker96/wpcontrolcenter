@@ -5,9 +5,20 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
+interface Site {
+  id: string;
+  name: string;
+  domain: string;
+  siteUrl: string;
+  environment: string;
+  connectionStatus: string;
+  wpVersion?: string;
+  phpVersion?: string;
+}
+
 export default function SitesPage() {
   const router = useRouter();
-  const [sites, setSites] = useState<any[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -46,15 +57,18 @@ export default function SitesPage() {
 
       const body = await response.json();
       setSites(body.data || []);
-    } catch (err: any) {
-      setError(err.message || "Could not load sites.");
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Could not load sites.";
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchSites();
+    Promise.resolve().then(() => {
+      fetchSites();
+    });
   }, []);
 
   const handleAddSite = async (e: React.FormEvent) => {
@@ -90,8 +104,9 @@ export default function SitesPage() {
       
       // Refresh sites
       fetchSites();
-    } catch (err: any) {
-      setError(err.message || "Failed to add site");
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to add site";
+      setError(errorMsg);
     } finally {
       setSubmitting(false);
     }

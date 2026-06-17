@@ -41,8 +41,9 @@ export default function LoginPage() {
       localStorage.setItem("wpcc_token", data.accessToken);
       localStorage.setItem("wpcc_user", JSON.stringify(data.user || { email }));
       router.push("/sites");
-    } catch (err: any) {
-      setError(err.message || "Something went wrong. Please try again.");
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }

@@ -5,6 +5,46 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
+interface SiteOverview {
+  name: string;
+  siteUrl: string;
+  domain: string;
+  connectionStatus: string;
+  wpVersion?: string;
+  phpVersion?: string;
+  lastSeenAt?: string;
+  pluginsCount?: number;
+  activePluginsCount?: number;
+  pluginUpdatesAvailable?: number;
+  themeUpdatesAvailable?: number;
+}
+
+interface PluginInfo {
+  id: string;
+  slug: string;
+  name: string;
+  versionInstalled: string;
+  versionLatest: string;
+  isActive: boolean;
+  updateAvailable: boolean;
+}
+
+interface ThemeInfo {
+  id: string;
+  slug: string;
+  name: string;
+  versionInstalled: string;
+  versionLatest: string;
+  isActive: boolean;
+  updateAvailable: boolean;
+}
+
+interface CoreInfo {
+  versionInstalled: string;
+  versionLatest: string;
+  updateAvailable: boolean;
+}
+
 export default function SiteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -13,10 +53,10 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   const [activeTab, setActiveTab] = useState("overview");
 
   // Site Data State
-  const [overviewData, setOverviewData] = useState<any>(null);
-  const [pluginsData, setPluginsData] = useState<any[]>([]);
-  const [themesData, setThemesData] = useState<any[]>([]);
-  const [coreData, setCoreData] = useState<any>(null);
+  const [overviewData, setOverviewData] = useState<SiteOverview | null>(null);
+  const [pluginsData, setPluginsData] = useState<PluginInfo[]>([]);
+  const [themesData, setThemesData] = useState<ThemeInfo[]>([]);
+  const [coreData, setCoreData] = useState<CoreInfo | null>(null);
 
   // Loading States
   const [loading, setLoading] = useState(true);
@@ -69,15 +109,18 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
         setCoreData(coreJson);
       }
 
-    } catch (err: any) {
-      setError(err.message || "An error occurred while loading data.");
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "An error occurred while loading data.";
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    Promise.resolve().then(() => {
+      fetchData();
+    });
   }, [id]);
 
   const handleSync = async () => {
@@ -101,8 +144,9 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       await fetchData();
-    } catch (err: any) {
-      setError(err.message || "Could not resync with WordPress site. Make sure it is online and the plugin is connected.");
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Could not resync with WordPress site. Make sure it is online and the plugin is connected.";
+      setError(errorMsg);
     } finally {
       setSyncing(false);
     }
