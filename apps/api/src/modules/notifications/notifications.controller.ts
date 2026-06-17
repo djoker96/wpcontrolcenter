@@ -4,6 +4,8 @@ import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '@wpcc/database';
+import { CreateChannelDto } from './dto/create-channel.dto';
+import { UpdateChannelDto } from './dto/update-channel.dto';
 
 @Controller('notifications')
 @UseGuards(AuthGuard, RolesGuard)
@@ -12,14 +14,32 @@ export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get('channels')
-  findAll() { return { data: this.notificationsService.findAll() }; }
+  async findAll() {
+    const data = await this.notificationsService.findAll();
+    return { data };
+  }
 
   @Post('channels')
-  create(@Body() body: Record<string, unknown>) { return { id: 'notification_new', ...body }; }
+  async create(@Body() dto: CreateChannelDto) {
+    const data = await this.notificationsService.create(dto);
+    return data;
+  }
 
   @Patch('channels/:id')
-  update(@Param('id') id: string, @Body() body: Record<string, unknown>) { return { id, ...body }; }
+  async update(@Param('id') id: string, @Body() dto: UpdateChannelDto) {
+    const data = await this.notificationsService.update(id, dto);
+    return data;
+  }
 
   @Delete('channels/:id')
-  remove(@Param('id') id: string) { return { success: true, id }; }
+  async remove(@Param('id') id: string) {
+    const data = await this.notificationsService.remove(id);
+    return { success: true, id: data.id };
+  }
+
+  @Get('events')
+  async findEvents() {
+    const data = await this.notificationsService.findEvents();
+    return { data };
+  }
 }
