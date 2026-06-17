@@ -90,6 +90,44 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
 
+  // Maintenance State
+  const [robotsContent, setRobotsContent] = useState("");
+  const [htaccessContent, setHtaccessContent] = useState("");
+  const [phpMemoryLimit, setPhpMemoryLimit] = useState("256M");
+  const [pluginSlugToInstall, setPluginSlugToInstall] = useState("");
+  const [actionRunning, setActionRunning] = useState(false);
+
+  const triggerMaintenanceAction = async (action: string, payload: Record<string, any> = {}) => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+
+    setActionRunning(true);
+    setError("");
+    try {
+      const res = await fetch(`http://localhost:3003/api/sites/${id}/actions/${action}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.message || `Action ${action} failed`);
+      }
+
+      const data = await res.json();
+      alert(`Maintenance Job Queued! Job ID: ${data.jobId}. Check Audit Log or reload shortly.`);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Action failed.";
+      setError(errorMsg);
+    } finally {
+      setActionRunning(false);
+    }
+  };
+
   const fetchData = async () => {
     const token = localStorage.getItem("wpcc_token");
     if (!token) {
@@ -296,6 +334,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
             { id: "themes", label: `Themes (${themesData.length})` },
             { id: "core", label: "Core Version" },
             { id: "uptime", label: `Uptime & Incidents (${incidentsList.filter(i => i.status === "OPEN").length})` },
+            { id: "maintenance", label: "Maintenance & Tools" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -584,6 +623,130 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                     </table>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "maintenance" && (
+            <div className="space-y-8">
+              {/* Core Utilities */}
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div className="rounded-lg border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                  <h4 className="text-md font-bold text-white font-heading">Cache Clean</h4>
+                  <p className="text-xs text-zinc-500">Flush WordPress object cache, transient data, and static files.</p>
+                  <Button
+                    onClick={() => triggerMaintenanceAction("clear-cache")}
+                    disabled={actionRunning}
+                    className="bg-violet-600 hover:bg-violet-500 text-white"
+                  >
+                    Flush Site Cache
+                  </Button>
+                </div>
+
+                <div className="rounded-lg border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                  <h4 className="text-md font-bold text-white font-heading">Optimize Database</h4>
+                  <p className="text-xs text-zinc-500">Run OPTIMIZE TABLE on all active WordPress tables.</p>
+                  <Button
+                    onClick={() => triggerMaintenanceAction("optimize-database")}
+                    disabled={actionRunning}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                  >
+                    Run DB Optimization
+                  </Button>
+                </div>
+              </div>
+
+              {/* Plugin Installer */}
+              <div className="rounded-lg border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                <h4 className="text-md font-bold text-white font-heading">Remote Plugin Installer</h4>
+                <p className="text-xs text-zinc-500">Download and install plugins directly from WordPress.org repository.</p>
+                <div className="flex gap-4">
+                  <input
+                    type="text"
+                    value={pluginSlugToInstall}
+                    onChange={(e) => setPluginSlugToInstall(e.target.value)}
+                    placeholder="e.g. contact-form-7"
+                    className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 p-2.5 text-sm text-white placeholder-zinc-600 outline-none"
+                  />
+                  <Button
+                    onClick={() => {
+                      triggerMaintenanceAction("install-plugin", { slug: pluginSlugToInstall });
+                      setPluginSlugToInstall("");
+                    }}
+                    disabled={actionRunning || !pluginSlugToInstall}
+                    className="bg-violet-600 hover:bg-violet-500 text-white"
+                  >
+                    Install Plugin
+                  </Button>
+                </div>
+              </div>
+
+              {/* Configurations Editor */}
+              <div className="space-y-6">
+                <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">File Editors</h4>
+                
+                {/* Robots.txt */}
+                <div className="rounded-lg border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                  <h5 className="font-semibold text-white">robots.txt</h5>
+                  <textarea
+                    value={robotsContent}
+                    onChange={(e) => setRobotsContent(e.target.value)}
+                    placeholder="User-agent: *&#10;Disallow: /wp-admin/"
+                    rows={4}
+                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-sm text-white font-mono outline-none"
+                  />
+                  <Button
+                    onClick={() => triggerMaintenanceAction("update-robots-txt", { content: robotsContent })}
+                    disabled={actionRunning}
+                    className="bg-violet-600 hover:bg-violet-500 text-white"
+                  >
+                    Save robots.txt
+                  </Button>
+                </div>
+
+                {/* .htaccess */}
+                <div className="rounded-lg border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                  <h5 className="font-semibold text-white">.htaccess</h5>
+                  <p className="text-xs text-zinc-500">Saves a backup copy as .htaccess.bak automatically before saving.</p>
+                  <textarea
+                    value={htaccessContent}
+                    onChange={(e) => setHtaccessContent(e.target.value)}
+                    placeholder="# Begin WordPress"
+                    rows={6}
+                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-sm text-white font-mono outline-none"
+                  />
+                  <Button
+                    onClick={() => triggerMaintenanceAction("update-htaccess", { content: htaccessContent })}
+                    disabled={actionRunning}
+                    className="bg-violet-600 hover:bg-violet-500 text-white"
+                  >
+                    Save .htaccess
+                  </Button>
+                </div>
+
+                {/* PHP config */}
+                <div className="rounded-lg border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                  <h5 className="font-semibold text-white">PHP local config (.user.ini)</h5>
+                  <div className="flex gap-4 items-center">
+                    <span className="text-xs text-zinc-400">Memory Limit</span>
+                    <select
+                      value={phpMemoryLimit}
+                      onChange={(e) => setPhpMemoryLimit(e.target.value)}
+                      className="rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-sm text-white outline-none"
+                    >
+                      <option value="128M">128M</option>
+                      <option value="256M">256M</option>
+                      <option value="512M">512M</option>
+                    </select>
+                    <Button
+                      onClick={() => triggerMaintenanceAction("update-php-config", { settings: { memory_limit: phpMemoryLimit } })}
+                      disabled={actionRunning}
+                      className="bg-violet-600 hover:bg-violet-500 text-white"
+                    >
+                      Apply Config
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
