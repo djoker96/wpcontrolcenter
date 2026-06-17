@@ -137,7 +137,19 @@ export default function SitesPage() {
               Admin
             </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
+            <Link
+              href="/integrations"
+              className="text-sm text-zinc-400 hover:text-zinc-200 transition"
+            >
+              Integrations
+            </Link>
+            <Link
+              href="/notifications"
+              className="text-sm text-zinc-400 hover:text-zinc-200 transition"
+            >
+              Notifications
+            </Link>
             <button
               onClick={handleLogout}
               className="text-sm text-zinc-400 hover:text-zinc-200 transition"
