@@ -30,4 +30,38 @@ class WPCC_Agent_Theme_Manager {
         }
         return $data;
     }
+
+    public function update_theme(string $theme_slug): array {
+        if (!class_exists('Theme_Upgrader')) {
+            require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        }
+
+        delete_site_transient('update_themes');
+        wp_update_themes();
+
+        $upgrader = new Theme_Upgrader(new Automatic_Upgrader_Skin());
+        $result = $upgrader->upgrade($theme_slug);
+
+        if (is_wp_error($result)) {
+            return ['success' => false, 'error' => $result->get_error_message()];
+        }
+        if ($result === false) {
+            return ['success' => false, 'error' => 'Theme upgrade failed or is already up to date.'];
+        }
+        return ['success' => true, 'message' => 'Theme updated successfully.'];
+    }
+
+    public function delete_theme(string $theme_slug): array {
+        if (!function_exists('delete_theme')) {
+            require_once ABSPATH . 'wp-admin/includes/theme.php';
+        }
+        $result = delete_theme($theme_slug);
+        if (is_wp_error($result)) {
+            return ['success' => false, 'error' => $result->get_error_message()];
+        }
+        if ($result === false) {
+            return ['success' => false, 'error' => 'Failed to delete theme files.'];
+        }
+        return ['success' => true, 'message' => 'Theme deleted successfully.'];
+    }
 }

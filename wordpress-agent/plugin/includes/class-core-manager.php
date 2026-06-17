@@ -25,4 +25,24 @@ class WPCC_Agent_Core_Manager {
             'updateAvailable' => $update_available,
         ];
     }
+
+    public function update_core(): array {
+        if (!class_exists('Core_Upgrader')) {
+            require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        }
+
+        wp_version_check();
+        $updates = get_core_updates();
+        if (empty($updates)) {
+            return ['success' => false, 'error' => 'No core updates available.'];
+        }
+
+        $upgrader = new Core_Upgrader(new Automatic_Upgrader_Skin());
+        $result = $upgrader->upgrade($updates[0]);
+
+        if (is_wp_error($result)) {
+            return ['success' => false, 'error' => $result->get_error_message()];
+        }
+        return ['success' => true, 'message' => 'WordPress core updated successfully.'];
+    }
 }

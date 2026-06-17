@@ -48,6 +48,8 @@ class WPCC_Agent_API {
 
     public function execute_action(WP_REST_Request $request): WP_REST_Response {
         $action = $request->get_param('action');
+        $body = json_decode($request->get_body(), true) ?: [];
+
         if ($action === 'sync-inventory') {
             $system_info = (new WPCC_Agent_System_Info())->collect();
             $plugins = (new WPCC_Agent_Plugin_Manager())->list_plugins();
@@ -65,10 +67,38 @@ class WPCC_Agent_API {
             ], 200);
         }
 
-        return new WP_REST_Response([
-            'success' => true,
-            'action' => $action,
-            'message' => 'Stub executor completed',
-        ], 200);
+        // Remote actions dispatch
+        switch ($action) {
+            case 'update-plugin':
+                $res = (new WPCC_Agent_Plugin_Manager())->update_plugin($body['slug'] ?? '');
+                break;
+            case 'activate-plugin':
+                $res = (new WPCC_Agent_Plugin_Manager())->activate_plugin($body['slug'] ?? '');
+                break;
+            case 'deactivate-plugin':
+                $res = (new WPCC_Agent_Plugin_Manager())->deactivate_plugin($body['slug'] ?? '');
+                break;
+            case 'delete-plugin':
+                $res = (new WPCC_Agent_Plugin_Manager())->delete_plugin($body['slug'] ?? '');
+                break;
+            case 'update-theme':
+                $res = (new WPCC_Agent_Theme_Manager())->update_theme($body['slug'] ?? '');
+                break;
+            case 'delete-theme':
+                $res = (new WPCC_Agent_Theme_Manager())->delete_theme($body['slug'] ?? '');
+                break;
+            case 'update-core':
+                $res = (new WPCC_Agent_Core_Manager())->update_core();
+                break;
+            case 'toggle-maintenance':
+                $enabled = filter_var($body['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                $success = (new WPCC_Agent_Maintenance_Manager())->toggle($enabled);
+                $res = ['success' => $success, 'message' => $success ? 'Maintenance toggled successfully.' : 'Failed to toggle maintenance mode.'];
+                break;
+            default:
+                return new WP_REST_Response(['success' => false, 'error' => 'Unknown action: ' . $action], 400);
+        }
+
+        return new WP_REST_Response($res, $res['success'] ? 200 : 500);
     }
 }
