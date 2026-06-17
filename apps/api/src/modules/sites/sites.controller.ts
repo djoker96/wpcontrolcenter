@@ -134,14 +134,33 @@ export class SitesController {
 
   @Get(':id/uptime')
   @Roles(UserRole.ADMIN)
-  uptime(@Param('id') id: string) {
-    return { siteId: id, data: [] };
+  async uptime(@Param('id') id: string) {
+    const checks = await this.sitesService.prisma.uptimeCheck.findMany({
+      where: { siteId: id },
+      orderBy: { checkedAt: 'desc' },
+      take: 50,
+    });
+
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentChecks = await this.sitesService.prisma.uptimeCheck.findMany({
+      where: { siteId: id, checkedAt: { gte: oneDayAgo } },
+    });
+    const total = recentChecks.length;
+    const up = recentChecks.filter(c => c.isUp).length;
+    const uptimeRatio = total > 0 ? Number(((up / total) * 100).toFixed(2)) : 100.0;
+
+    return { siteId: id, uptimeRatio, data: checks };
   }
 
   @Get(':id/incidents')
   @Roles(UserRole.ADMIN)
-  incidents(@Param('id') id: string) {
-    return { siteId: id, data: [] };
+  async incidents(@Param('id') id: string) {
+    const incidents = await this.sitesService.prisma.incident.findMany({
+      where: { siteId: id },
+      orderBy: { startedAt: 'desc' },
+      take: 20,
+    });
+    return { siteId: id, data: incidents };
   }
 
   @Get(':id/analytics')

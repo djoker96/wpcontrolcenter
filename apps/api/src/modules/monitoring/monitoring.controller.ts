@@ -15,8 +15,14 @@ export class MonitoringController {
   overview() { return this.monitoringService.overview(); }
 
   @Get('incidents')
-  incidents() { return { data: [] }; }
+  async incidents() {
+    const data = await this.monitoringService.findManyIncidents();
+    return { data };
+  }
 
   @Get('uptime-checks')
-  uptimeChecks() { return { data: [] }; }
+  async uptimeChecks() {
+    const data = await this.monitoringService.findManyUptimeChecks();
+    return { data };
+  }
 }
