@@ -46,6 +46,12 @@ function getActionSlug(jobType: string): string {
     case 'DELETE_THEME': return 'delete-theme';
     case 'UPDATE_CORE': return 'update-core';
     case 'TOGGLE_MAINTENANCE': return 'toggle-maintenance';
+    case 'INSTALL_PLUGIN': return 'install-plugin';
+    case 'CLEAR_CACHE': return 'clear-cache';
+    case 'OPTIMIZE_DATABASE': return 'optimize-database';
+    case 'UPDATE_ROBOTS_TXT': return 'update-robots-txt';
+    case 'UPDATE_HTACCESS': return 'update-htaccess';
+    case 'UPDATE_PHP_CONFIG': return 'update-php-config';
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
@@ -326,6 +332,31 @@ const worker = new Worker(
           payloadJson: { result: resBody },
         },
       });
+
+      // If it's a configuration edit, write a snapshot
+      if (['UPDATE_ROBOTS_TXT', 'UPDATE_HTACCESS', 'UPDATE_PHP_CONFIG'].includes(dbJob.jobType)) {
+        let robotsTxtContent: string | null = null;
+        let htaccessContent: string | null = null;
+        let phpIniContent: string | null = null;
+
+        if (dbJob.jobType === 'UPDATE_ROBOTS_TXT') {
+          robotsTxtContent = bodyObj.content || '';
+        } else if (dbJob.jobType === 'UPDATE_HTACCESS') {
+          htaccessContent = bodyObj.content || '';
+        } else if (dbJob.jobType === 'UPDATE_PHP_CONFIG') {
+          phpIniContent = JSON.stringify(bodyObj.settings || {});
+        }
+
+        await prisma.maintenanceSnapshot.create({
+          data: {
+            siteId: site.id,
+            robotsTxtContent,
+            htaccessContent,
+            phpIniContent,
+            createdByUserId: dbJob.initiatedByUserId,
+          },
+        });
+      }
 
       // Trigger inventory sync in background to fetch updated site status
       await logToJob(jobId, LogLevel.INFO, 'Triggering site inventory resync in background...');

@@ -428,6 +428,43 @@ export class SitesService {
           throw new BadRequestException('Maintenance status (enabled) is required');
         }
         break;
+      case 'install-plugin':
+        jobType = JobType.INSTALL_PLUGIN;
+        targetType = JobTargetType.PLUGIN;
+        targetSlug = body.slug || null;
+        if (!targetSlug) {
+          throw new BadRequestException('Plugin slug is required');
+        }
+        break;
+      case 'clear-cache':
+        jobType = JobType.CLEAR_CACHE;
+        targetType = JobTargetType.CACHE;
+        break;
+      case 'optimize-database':
+        jobType = JobType.OPTIMIZE_DATABASE;
+        targetType = JobTargetType.DATABASE;
+        break;
+      case 'update-robots-txt':
+        jobType = JobType.UPDATE_ROBOTS_TXT;
+        targetType = JobTargetType.CONFIG;
+        if (body.content === undefined) {
+          throw new BadRequestException('Robots.txt content is required');
+        }
+        break;
+      case 'update-htaccess':
+        jobType = JobType.UPDATE_HTACCESS;
+        targetType = JobTargetType.CONFIG;
+        if (body.content === undefined) {
+          throw new BadRequestException('.htaccess content is required');
+        }
+        break;
+      case 'update-php-config':
+        jobType = JobType.UPDATE_PHP_CONFIG;
+        targetType = JobTargetType.CONFIG;
+        if (!body.settings || typeof body.settings !== 'object') {
+          throw new BadRequestException('PHP settings object is required');
+        }
+        break;
       default:
         throw new BadRequestException(`Unknown action: ${action}`);
     }
