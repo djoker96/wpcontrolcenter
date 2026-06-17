@@ -6,6 +6,7 @@ import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '@wpcc/database';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @Controller('sites')
 @UseGuards(AuthGuard, RolesGuard)
@@ -157,8 +158,13 @@ export class SitesController {
 
   @Post(':id/actions/:action')
   @Roles(UserRole.ADMIN)
-  executeAction(@Param('id') id: string, @Param('action') action: string, @Body() body: Record<string, unknown>) {
-    return { siteId: id, action, jobId: `job_${action}`, payload: body };
+  executeAction(
+    @Param('id') id: string,
+    @Param('action') action: string,
+    @Body() body: Record<string, any>,
+    @CurrentUser() user: any
+  ) {
+    return this.sitesService.createJob(id, action, body, user?.id);
   }
 
   @Post(':id/integrations/:provider')

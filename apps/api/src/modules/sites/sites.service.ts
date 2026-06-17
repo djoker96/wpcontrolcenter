@@ -1,13 +1,18 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateSiteDto } from './dto/create-site.dto';
 import { UpdateSiteDto } from './dto/update-site.dto';
 import { encrypt, decrypt } from '../../common/utils/crypto.utils';
 import { randomBytes, createHmac } from 'node:crypto';
+import { Queue } from 'bullmq';
+import { JobType, JobTargetType } from '@wpcc/database';
 
 @Injectable()
 export class SitesService {
-  constructor(public readonly prisma: PrismaService) {}
+  constructor(
+    public readonly prisma: PrismaService,
+    @Inject('JOBS_QUEUE') private readonly jobsQueue: Queue,
+  ) {}
 
   private getEncryptionKey(): string {
     return process.env.AGENT_ENCRYPTION_KEY || '6a66632c253d82a17cb0b51de38e8cb554c8651a24d852a35368a5436d4f9bf3';
@@ -344,5 +349,109 @@ export class SitesService {
       });
       throw error;
     }
+  }
+
+  async createJob(siteId: string, action: string, body: Record<string, any>, initiatedByUserId?: string) {
+    const site = await this.prisma.site.findUnique({
+      where: { id: siteId },
+    });
+
+    if (!site) {
+      throw new NotFoundException(`Site with ID ${siteId} not found`);
+    }
+
+    let jobType: JobType;
+    let targetType: JobTargetType;
+    let targetSlug: string | null = null;
+
+    switch (action) {
+      case 'update-plugin':
+        jobType = JobType.UPDATE_PLUGIN;
+        targetType = JobTargetType.PLUGIN;
+        targetSlug = body.slug || null;
+        if (!targetSlug) {
+          throw new BadRequestException('Plugin slug is required');
+        }
+        break;
+      case 'activate-plugin':
+        jobType = JobType.ACTIVATE_PLUGIN;
+        targetType = JobTargetType.PLUGIN;
+        targetSlug = body.slug || null;
+        if (!targetSlug) {
+          throw new BadRequestException('Plugin slug is required');
+        }
+        break;
+      case 'deactivate-plugin':
+        jobType = JobType.DEACTIVATE_PLUGIN;
+        targetType = JobTargetType.PLUGIN;
+        targetSlug = body.slug || null;
+        if (!targetSlug) {
+          throw new BadRequestException('Plugin slug is required');
+        }
+        break;
+      case 'delete-plugin':
+        jobType = JobType.DELETE_PLUGIN;
+        targetType = JobTargetType.PLUGIN;
+        targetSlug = body.slug || null;
+        if (!targetSlug) {
+          throw new BadRequestException('Plugin slug is required');
+        }
+        break;
+      case 'update-theme':
+        jobType = JobType.UPDATE_THEME;
+        targetType = JobTargetType.THEME;
+        targetSlug = body.slug || null;
+        if (!targetSlug) {
+          throw new BadRequestException('Theme slug is required');
+        }
+        break;
+      case 'delete-theme':
+        jobType = JobType.DELETE_THEME;
+        targetType = JobTargetType.THEME;
+        targetSlug = body.slug || null;
+        if (!targetSlug) {
+          throw new BadRequestException('Theme slug is required');
+        }
+        break;
+      case 'update-core':
+        jobType = JobType.UPDATE_CORE;
+        targetType = JobTargetType.CORE;
+        break;
+      case 'toggle-maintenance':
+        jobType = JobType.TOGGLE_MAINTENANCE;
+        targetType = JobTargetType.SITE;
+        if (body.enabled === undefined) {
+          throw new BadRequestException('Maintenance status (enabled) is required');
+        }
+        break;
+      default:
+        throw new BadRequestException(`Unknown action: ${action}`);
+    }
+
+    const job = await this.prisma.job.create({
+      data: {
+        siteId,
+        jobType,
+        targetType,
+        targetSlug,
+        payloadJson: body || {},
+        status: 'QUEUED',
+        initiatedByUserId,
+        queuedAt: new Date(),
+      },
+    });
+
+    // Enqueue job in BullMQ
+    await this.jobsQueue.add(
+      'remote-action',
+      { jobId: job.id },
+      { jobId: job.id }
+    );
+
+    return {
+      success: true,
+      jobId: job.id,
+      status: job.status,
+    };
   }
 }
