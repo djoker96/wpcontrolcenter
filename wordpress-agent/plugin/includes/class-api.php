@@ -72,6 +72,24 @@ class WPCC_Agent_API {
             case 'update-plugin':
                 $res = (new WPCC_Agent_Plugin_Manager())->update_plugin($body['slug'] ?? '');
                 break;
+            case 'install-plugin':
+                $res = (new WPCC_Agent_Plugin_Manager())->install_plugin($body['slug'] ?? '');
+                break;
+            case 'clear-cache':
+                $res = (new WPCC_Agent_Cache_Manager())->clear();
+                break;
+            case 'optimize-database':
+                $res = (new WPCC_Agent_DB_Manager())->optimize();
+                break;
+            case 'update-robots-txt':
+                $res = (new WPCC_Agent_File_Editor())->update_robots($body['content'] ?? '');
+                break;
+            case 'update-htaccess':
+                $res = (new WPCC_Agent_File_Editor())->update_htaccess($body['content'] ?? '');
+                break;
+            case 'update-php-config':
+                $res = (new WPCC_Agent_File_Editor())->update_php_config($body['settings'] ?? []);
+                break;
             case 'activate-plugin':
                 $res = (new WPCC_Agent_Plugin_Manager())->activate_plugin($body['slug'] ?? '');
                 break;

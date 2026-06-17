@@ -95,4 +95,58 @@ class WPCC_Agent_Plugin_Manager {
         }
         return ['success' => true, 'message' => 'Plugin deleted successfully.'];
     }
+
+    public function install_plugin(string $slug): array {
+        if (empty($slug)) {
+            return ['success' => false, 'error' => 'Plugin slug is required.'];
+        }
+
+        if (!function_exists('plugins_api')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin-install.php';
+        }
+        if (!class_exists('Plugin_Upgrader')) {
+            require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        }
+
+        $api = plugins_api('plugin_information', [
+            'slug' => $slug,
+            'fields' => ['sections' => false],
+        ]);
+
+        if (is_wp_error($api)) {
+            return ['success' => false, 'error' => $api->get_error_message()];
+        }
+
+        $upgrader = new Plugin_Upgrader(new Automatic_Upgrader_Skin());
+        $result = $upgrader->install($api->download_link);
+
+        if (is_wp_error($result)) {
+            return ['success' => false, 'error' => $result->get_error_message()];
+        }
+        if ($result === false) {
+            return ['success' => false, 'error' => 'Plugin installation failed.'];
+        }
+
+        // Locate the installed plugin file name
+        $plugin_file = $this->find_plugin_file_by_slug($slug);
+        
+        return [
+            'success' => true, 
+            'message' => 'Plugin installed successfully.', 
+            'pluginFile' => $plugin_file
+        ];
+    }
+
+    private function find_plugin_file_by_slug(string $slug): string {
+        if (!function_exists('get_plugins')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        $plugins = get_plugins();
+        foreach (array_keys($plugins) as $file) {
+            if (dirname($file) === $slug) {
+                return $file;
+            }
+        }
+        return $slug . '/' . $slug . '.php';
+    }
 }
