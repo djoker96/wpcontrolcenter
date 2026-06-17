@@ -1,10 +1,33 @@
 import { PrismaClient, UserRole, EnvironmentType, ConnectionStatus, SiteStatus, JobStatus, JobType, JobTargetType, IncidentSeverity, IncidentStatus, IncidentType, NotificationChannelType, AnalyticsSource, AuditResult, LogLevel, IntegrationProvider, IntegrationStatus } from '@prisma/client';
-import { createHash } from 'node:crypto';
+import { createHash, createCipheriv, randomBytes } from 'node:crypto';
+import * as dotenv from 'dotenv';
+import * as path from 'node:path';
+
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const prisma = new PrismaClient();
+const ALGORITHM = 'aes-256-gcm';
 
-function fakeEncrypt(value: string): string {
-  return `enc:${Buffer.from(value, 'utf8').toString('base64')}`;
+function encrypt(text: string, secretKeyHex: string): string {
+  const key = Buffer.from(secretKeyHex, 'hex');
+  const iv = randomBytes(12);
+  const cipher = createCipheriv(ALGORITHM, key, iv);
+  
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  
+  const authTag = cipher.getAuthTag().toString('hex');
+  
+  return `${iv.toString('hex')}:${encrypted}:${authTag}`;
+}
+
+const encKey = process.env.AGENT_ENCRYPTION_KEY;
+if (!encKey) {
+  throw new Error('AGENT_ENCRYPTION_KEY environment variable is required for seeding encrypted fields');
+}
+
+function encryptValue(value: string): string {
+  return encrypt(value, encKey!);
 }
 
 function hashPassword(password: string): string {
@@ -27,8 +50,8 @@ async function main(): Promise<void> {
     data: {
       provider: IntegrationProvider.GOOGLE,
       accountEmail: 'analytics@example.com',
-      accessTokenEncrypted: fakeEncrypt('google-access-token'),
-      refreshTokenEncrypted: fakeEncrypt('google-refresh-token'),
+      accessTokenEncrypted: encryptValue('google-access-token'),
+      refreshTokenEncrypted: encryptValue('google-refresh-token'),
       status: IntegrationStatus.ACTIVE,
       metadataJson: {
         scopes: ['https://www.googleapis.com/auth/analytics.readonly', 'https://www.googleapis.com/auth/webmasters.readonly'],
@@ -57,8 +80,8 @@ async function main(): Promise<void> {
       credential: {
         create: {
           publicKey: 'demo-public-key',
-          secretKeyEncrypted: fakeEncrypt('demo-secret-key'),
-          connectionTokenEncrypted: fakeEncrypt('demo-connection-token'),
+          secretKeyEncrypted: encryptValue('demo-secret-key'),
+          connectionTokenEncrypted: encryptValue('demo-connection-token'),
           lastRotatedAt: new Date(),
         },
       },
