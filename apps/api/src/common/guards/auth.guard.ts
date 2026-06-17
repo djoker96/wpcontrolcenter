@@ -17,7 +17,10 @@ export class AuthGuard implements CanActivate {
     }
 
     try {
-      const secret = process.env.JWT_SECRET || 'super-secret-jwt-key-replace-in-production';
+      const secret = process.env.JWT_SECRET;
+      if (!secret) {
+        throw new Error('JWT_SECRET environment variable is missing');
+      }
       const decoded = jwt.verify(token, secret) as any;
       request.user = decoded;
       return true;

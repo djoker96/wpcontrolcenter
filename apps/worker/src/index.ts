@@ -29,7 +29,11 @@ function decrypt(encryptedText: string, secretKeyHex: string): string {
 }
 
 function getEncryptionKey(): string {
-  return process.env.AGENT_ENCRYPTION_KEY || '6a66632c253d82a17cb0b51de38e8cb554c8651a24d852a35368a5436d4f9bf3';
+  const key = process.env.AGENT_ENCRYPTION_KEY;
+  if (!key) {
+    throw new Error('AGENT_ENCRYPTION_KEY environment variable is missing');
+  }
+  return key;
 }
 
 function getActionSlug(jobType: string): string {
