@@ -97,7 +97,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   const [pluginSlugToInstall, setPluginSlugToInstall] = useState("");
   const [actionRunning, setActionRunning] = useState(false);
 
-  const triggerMaintenanceAction = async (action: string, payload: Record<string, any> = {}) => {
+  const triggerMaintenanceAction = async (action: string, payload: Record<string, unknown> = {}) => {
     const token = localStorage.getItem("wpcc_token");
     if (!token) return;
 
