@@ -375,12 +375,150 @@ worker.on('failed', (job, err) => {
   console.error(`[worker] Job ${job?.id} failed with error:`, err);
 });
 
-// Keep existing mocks ticking for background compatibility
+// Real-time Uptime Monitoring Engine
+async function runUptimeChecks() {
+  console.log(`[worker] Starting uptime checks at ${new Date().toISOString()}`);
+  try {
+    const sites = await prisma.site.findMany({
+      where: {
+        status: 'ACTIVE',
+        setting: {
+          uptimeCheckEnabled: true,
+        },
+      },
+      include: {
+        setting: true,
+      },
+    });
+
+    for (const site of sites) {
+      let isUp = false;
+      let responseTimeMs = 0;
+      let statusCode: number | null = null;
+      let errorMessage: string | null = null;
+
+      const start = performance.now();
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+        const response = await fetch(site.siteUrl, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'WP-Control-Center-Monitor/1.0',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        responseTimeMs = Math.round(performance.now() - start);
+        statusCode = response.status;
+        isUp = response.status < 400;
+        if (!isUp) {
+          errorMessage = `HTTP Status Code ${response.status}`;
+        }
+      } catch (err: any) {
+        responseTimeMs = Math.round(performance.now() - start);
+        isUp = false;
+        errorMessage = err.message || 'Network Timeout / Connection Error';
+      }
+
+      // Save check log
+      await prisma.uptimeCheck.create({
+        data: {
+          siteId: site.id,
+          statusCode,
+          responseTimeMs,
+          isUp,
+          errorMessage,
+        },
+      });
+
+      if (isUp) {
+        // If site is UP, check if there's any OPEN incident and auto-resolve it
+        const openIncidents = await prisma.incident.findMany({
+          where: {
+            siteId: site.id,
+            status: 'OPEN',
+            incidentType: 'UPTIME',
+          },
+        });
+
+        if (openIncidents.length > 0) {
+          console.log(`[worker] Site ${site.domain} is BACK UP. Resolving ${openIncidents.length} incidents.`);
+          await prisma.incident.updateMany({
+            where: {
+              siteId: site.id,
+              status: 'OPEN',
+              incidentType: 'UPTIME',
+            },
+            data: {
+              status: 'RESOLVED',
+              endedAt: new Date(),
+              summary: 'Website is back up and responding normally.',
+            },
+          });
+        }
+      } else {
+        // If site is DOWN, fetch last 3 checks to verify consecutive failure threshold
+        const lastChecks = await prisma.uptimeCheck.findMany({
+          where: { siteId: site.id },
+          orderBy: { checkedAt: 'desc' },
+          take: 3,
+        });
+
+        const consecutiveFailures = lastChecks.filter(c => !c.isUp).length;
+        if (consecutiveFailures >= 3) {
+          // Check if there is already an open incident
+          const activeIncident = await prisma.incident.findFirst({
+            where: {
+              siteId: site.id,
+              status: 'OPEN',
+              incidentType: 'UPTIME',
+            },
+          });
+
+          if (!activeIncident) {
+            console.log(`[worker] Site ${site.domain} down for 3 consecutive checks. Opening INCIDENT.`);
+            await prisma.incident.create({
+              data: {
+                siteId: site.id,
+                incidentType: 'UPTIME',
+                severity: 'CRITICAL',
+                startedAt: new Date(),
+                status: 'OPEN',
+                summary: `Website is offline. Error: ${errorMessage}`,
+                metadataJson: {
+                  lastStatusCode: statusCode,
+                  consecutiveFailures,
+                },
+              },
+            });
+          }
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error('[worker] Error running uptime checks:', error);
+  }
+}
+
+const intervalSeconds = process.env.UPTIME_CHECK_INTERVAL_SECONDS ? Number(process.env.UPTIME_CHECK_INTERVAL_SECONDS) : 300;
+console.log(`[worker] Uptime check interval configured to ${intervalSeconds}s`);
+
+// Start periodic checks
+setInterval(() => {
+  Promise.resolve().then(() => runUptimeChecks());
+}, intervalSeconds * 1000);
+
+// Run once immediately on start after microtask delay
+Promise.resolve().then(() => runUptimeChecks());
+
+// Keep other mocks ticking for background compatibility
 function tick(name: string): void {
   console.log(`[worker] ${name} tick at ${new Date().toISOString()}`);
 }
 
-setInterval(() => tick('uptime-check'), 5 * 60 * 1000);
 setInterval(() => tick('analytics-sync'), 60 * 60 * 1000);
 setInterval(() => tick('dispatch-jobs'), 15 * 1000);
 
