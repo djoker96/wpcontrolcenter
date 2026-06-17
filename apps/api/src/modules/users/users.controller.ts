@@ -1,19 +1,46 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '@wpcc/database';
 
 @Controller('users')
+@UseGuards(AuthGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  findAll() { return { data: this.usersService.findAll() }; }
+  @Roles(UserRole.ADMIN)
+  async findAll() {
+    const data = await this.usersService.findAll();
+    return { data };
+  }
+
+  @Get(':id')
+  @Roles(UserRole.ADMIN)
+  async findOne(@Param('id') id: string) {
+    return this.usersService.findOne(id);
+  }
 
   @Post()
-  create(@Body() body: Record<string, unknown>) { return { id: 'user_new', ...body }; }
+  @Roles(UserRole.ADMIN)
+  async create(@Body() createUserDto: CreateUserDto) {
+    return this.usersService.create(createUserDto);
+  }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: Record<string, unknown>) { return { id, ...body }; }
+  @Roles(UserRole.ADMIN)
+  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(id, updateUserDto);
+  }
 
   @Delete(':id')
-  remove(@Param('id') id: string) { return { success: true, id }; }
+  @Roles(UserRole.SUPER_ADMIN)
+  async remove(@Param('id') id: string) {
+    const deleted = await this.usersService.remove(id);
+    return { success: true, id: deleted.id };
+  }
 }
