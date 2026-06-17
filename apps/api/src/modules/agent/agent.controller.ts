@@ -1,25 +1,45 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards, Req } from '@nestjs/common';
 import { AgentService } from './agent.service';
+import { AgentGuard } from '../../common/guards/agent.guard';
 
 @Controller('agent')
 export class AgentController {
   constructor(private readonly agentService: AgentService) {}
 
   @Post('register')
-  register(@Body() body: Record<string, unknown>) { return this.agentService.register(); }
+  async register(
+    @Body() body: { connectionToken: string; siteUrl: string; domain: string },
+  ) {
+    return this.agentService.register(body.connectionToken, body.siteUrl, body.domain);
+  }
 
   @Post('heartbeat')
-  heartbeat(@Body() body: Record<string, unknown>) { return this.agentService.heartbeat(); }
+  @UseGuards(AgentGuard)
+  async heartbeat(@Req() req: any, @Body() body: any) {
+    return this.agentService.heartbeat(req.siteId, body);
+  }
 
   @Post('system-info')
-  systemInfo(@Body() body: Record<string, unknown>) { return { success: true, payload: body }; }
+  @UseGuards(AgentGuard)
+  systemInfo(@Req() req: any, @Body() body: any) {
+    return { success: true, siteId: req.siteId, payload: body };
+  }
 
   @Post('sync/plugins')
-  syncPlugins(@Body() body: Record<string, unknown>) { return { success: true, payload: body }; }
+  @UseGuards(AgentGuard)
+  syncPlugins(@Req() req: any, @Body() body: any) {
+    return { success: true, siteId: req.siteId, payload: body };
+  }
 
   @Post('sync/themes')
-  syncThemes(@Body() body: Record<string, unknown>) { return { success: true, payload: body }; }
+  @UseGuards(AgentGuard)
+  syncThemes(@Req() req: any, @Body() body: any) {
+    return { success: true, siteId: req.siteId, payload: body };
+  }
 
   @Post('sync/core')
-  syncCore(@Body() body: Record<string, unknown>) { return { success: true, payload: body }; }
+  @UseGuards(AgentGuard)
+  syncCore(@Req() req: any, @Body() body: any) {
+    return { success: true, siteId: req.siteId, payload: body };
+  }
 }

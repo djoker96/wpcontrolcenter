@@ -1,64 +1,123 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { SitesService } from './sites.service';
+import { CreateSiteDto } from './dto/create-site.dto';
+import { UpdateSiteDto } from './dto/update-site.dto';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '@wpcc/database';
 
 @Controller('sites')
+@UseGuards(AuthGuard, RolesGuard)
 export class SitesController {
   constructor(private readonly sitesService: SitesService) {}
 
   @Get()
-  findAll(@Query() query: Record<string, string>) { return { data: this.sitesService.findAll(), query }; }
+  @Roles(UserRole.ADMIN)
+  async findAll() {
+    const data = await this.sitesService.findAll();
+    return { data };
+  }
 
   @Post()
-  create(@Body() body: Record<string, unknown>) { return { id: 'site_new', ...body }; }
+  @Roles(UserRole.ADMIN)
+  async create(@Body() createSiteDto: CreateSiteDto) {
+    return this.sitesService.create(createSiteDto);
+  }
 
   @Get(':id')
-  findOne(@Param('id') id: string) { return this.sitesService.findOne(id); }
+  @Roles(UserRole.ADMIN)
+  async findOne(@Param('id') id: string) {
+    return this.sitesService.findOne(id);
+  }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: Record<string, unknown>) { return { id, ...body }; }
+  @Roles(UserRole.ADMIN)
+  async update(@Param('id') id: string, @Body() updateSiteDto: UpdateSiteDto) {
+    return this.sitesService.update(id, updateSiteDto);
+  }
 
   @Delete(':id')
-  remove(@Param('id') id: string) { return { success: true, id }; }
+  @Roles(UserRole.SUPER_ADMIN)
+  async remove(@Param('id') id: string) {
+    const deleted = await this.sitesService.remove(id);
+    return { success: true, id: deleted.id };
+  }
 
   @Post(':id/generate-connection-token')
-  generateConnectionToken(@Param('id') id: string) { return { siteId: id, token: 'one-time-token' }; }
+  @Roles(UserRole.ADMIN)
+  async generateConnectionToken(@Param('id') id: string) {
+    return this.sitesService.generateConnectionToken(id);
+  }
 
   @Post(':id/rotate-secret')
-  rotateSecret(@Param('id') id: string) { return { siteId: id, rotated: true }; }
+  @Roles(UserRole.ADMIN)
+  async rotateSecret(@Param('id') id: string) {
+    return this.sitesService.rotateSecret(id);
+  }
 
   @Post(':id/resync')
-  resync(@Param('id') id: string) { return { siteId: id, jobId: 'job_resync_stub' }; }
+  @Roles(UserRole.ADMIN)
+  resync(@Param('id') id: string) {
+    return { siteId: id, jobId: 'job_resync_stub' };
+  }
 
   @Get(':id/overview')
-  overview(@Param('id') id: string) { return { siteId: id, summary: { pendingUpdates: 3, isUp: true } }; }
+  @Roles(UserRole.ADMIN)
+  overview(@Param('id') id: string) {
+    return { siteId: id, summary: { pendingUpdates: 3, isUp: true } };
+  }
 
   @Get(':id/plugins')
-  plugins(@Param('id') id: string) { return { siteId: id, data: [] }; }
+  @Roles(UserRole.ADMIN)
+  plugins(@Param('id') id: string) {
+    return { siteId: id, data: [] };
+  }
 
   @Get(':id/themes')
-  themes(@Param('id') id: string) { return { siteId: id, data: [] }; }
+  @Roles(UserRole.ADMIN)
+  themes(@Param('id') id: string) {
+    return { siteId: id, data: [] };
+  }
 
   @Get(':id/core')
-  core(@Param('id') id: string) { return { siteId: id, versionInstalled: '6.5.5' }; }
+  @Roles(UserRole.ADMIN)
+  core(@Param('id') id: string) {
+    return { siteId: id, versionInstalled: '6.5.5' };
+  }
 
   @Get(':id/uptime')
-  uptime(@Param('id') id: string) { return { siteId: id, data: [] }; }
+  @Roles(UserRole.ADMIN)
+  uptime(@Param('id') id: string) {
+    return { siteId: id, data: [] };
+  }
 
   @Get(':id/incidents')
-  incidents(@Param('id') id: string) { return { siteId: id, data: [] }; }
+  @Roles(UserRole.ADMIN)
+  incidents(@Param('id') id: string) {
+    return { siteId: id, data: [] };
+  }
 
   @Get(':id/analytics')
-  analytics(@Param('id') id: string) { return { siteId: id, summary: {} }; }
+  @Roles(UserRole.ADMIN)
+  analytics(@Param('id') id: string) {
+    return { siteId: id, summary: {} };
+  }
 
   @Get(':id/audit-logs')
-  auditLogs(@Param('id') id: string) { return { siteId: id, data: [] }; }
+  @Roles(UserRole.ADMIN)
+  auditLogs(@Param('id') id: string) {
+    return { siteId: id, data: [] };
+  }
 
   @Post(':id/actions/:action')
+  @Roles(UserRole.ADMIN)
   executeAction(@Param('id') id: string, @Param('action') action: string, @Body() body: Record<string, unknown>) {
     return { siteId: id, action, jobId: `job_${action}`, payload: body };
   }
 
   @Post(':id/integrations/:provider')
+  @Roles(UserRole.ADMIN)
   attachIntegration(@Param('id') id: string, @Param('provider') provider: string, @Body() body: Record<string, unknown>) {
     return { siteId: id, provider, ...body };
   }
