@@ -19,6 +19,8 @@ interface SiteOverview {
   themeUpdatesAvailable?: number;
   timezone?: string;
   wpAgentVersion?: string;
+  coreUpdateAvailable?: boolean;
+  coreVersionLatest?: string | null;
 }
 
 interface PluginInfo {
