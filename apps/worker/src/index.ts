@@ -1,5 +1,5 @@
 import { Worker, Job as BullJob } from 'bullmq';
-import { PrismaClient, JobStatus, LogLevel, AuditResult, AnalyticsSource } from '@wpcc/database';
+import { PrismaClient, JobStatus, LogLevel, AuditResult, AnalyticsSource, NotificationChannelType, NotificationDeliveryStatus } from '@wpcc/database';
 import { createDecipheriv, createHmac, createCipheriv, randomBytes } from 'node:crypto';
 import * as dotenv from 'dotenv';
 import { setInterval } from 'node:timers';
@@ -419,6 +419,105 @@ worker.on('failed', (job, err) => {
   console.error(`[worker] Job ${job?.id} failed with error:`, err);
 });
 
+// Real-time Uptime Alerts & Notification Dispatcher Engine
+async function dispatchNotifications(incidentId: string, eventType: 'INCIDENT_OPENED' | 'INCIDENT_RESOLVED') {
+  console.log(`[worker] Dispatching alerts for incident ${incidentId} (Event: ${eventType})`);
+  try {
+    const incident = await prisma.incident.findUnique({
+      where: { id: incidentId },
+      include: { site: true },
+    });
+
+    if (!incident) return;
+
+    const channels = await prisma.notification.findMany({
+      where: { isEnabled: true },
+    });
+
+    for (const channel of channels) {
+      // Create pending event record
+      const event = await prisma.notificationEvent.create({
+        data: {
+          siteId: incident.siteId,
+          incidentId: incident.id,
+          notificationId: channel.id,
+          eventType,
+          channelType: channel.channelType,
+          destination: channel.destination,
+          status: NotificationDeliveryStatus.PENDING,
+        },
+      });
+
+      // Async sending trigger
+      Promise.resolve().then(async () => {
+        let success = false;
+        let payload: any = {};
+        
+        try {
+          const messageText = eventType === 'INCIDENT_OPENED'
+            ? `🚨 [WP Control Center] INCIDENT ALERT!\nWebsite: ${incident.site?.name} (${incident.site?.siteUrl})\nStatus: DOWN\nSeverity: ${incident.severity}\nSummary: ${incident.summary}\nTime: ${incident.startedAt.toLocaleString()}`
+            : `✅ [WP Control Center] INCIDENT RESOLVED!\nWebsite: ${incident.site?.name} (${incident.site?.siteUrl})\nStatus: BACK ONLINE\nTime: ${new Date().toLocaleString()}`;
+
+          if (channel.channelType === NotificationChannelType.EMAIL) {
+            console.log(`[worker] [EMAIL SIMULATION] Sent to ${channel.destination}:\n${messageText}`);
+            success = true;
+            payload = { message: messageText, simulated: true };
+          } else if (channel.channelType === NotificationChannelType.WEBHOOK) {
+            const res = await fetch(channel.destination, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                event: eventType,
+                site: { id: incident.siteId, name: incident.site?.name, url: incident.site?.siteUrl },
+                incident: { id: incident.id, severity: incident.severity, summary: incident.summary, startedAt: incident.startedAt }
+              }),
+            });
+            success = res.ok;
+            payload = { statusCode: res.status };
+          } else if (channel.channelType === NotificationChannelType.SLACK || channel.channelType === NotificationChannelType.DISCORD) {
+            const res = await fetch(channel.destination, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: messageText }),
+            });
+            success = res.ok;
+            payload = { statusCode: res.status };
+          } else if (channel.channelType === NotificationChannelType.TELEGRAM) {
+            const [botToken, chatId] = channel.destination.split(':');
+            if (botToken && chatId) {
+              const tgUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+              const res = await fetch(tgUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: chatId, text: messageText }),
+              });
+              success = res.ok;
+              payload = await res.json();
+            } else {
+              throw new Error('Telegram destination format must be token:chatId');
+            }
+          }
+        } catch (err: any) {
+          console.error(`[worker] Failed to send alert to channel ${channel.id}:`, err);
+          payload = { error: err.message };
+        }
+
+        // Update event result
+        await prisma.notificationEvent.update({
+          where: { id: event.id },
+          data: {
+            status: success ? NotificationDeliveryStatus.SENT : NotificationDeliveryStatus.FAILED,
+            payloadJson: payload,
+            sentAt: success ? new Date() : null,
+          },
+        });
+      });
+    }
+  } catch (err) {
+    console.error('[worker] Error dispatching alerts:', err);
+  }
+}
+
 // Real-time Uptime Monitoring Engine
 async function runUptimeChecks() {
   console.log(`[worker] Starting uptime checks at ${new Date().toISOString()}`);
@@ -490,18 +589,18 @@ async function runUptimeChecks() {
 
         if (openIncidents.length > 0) {
           console.log(`[worker] Site ${site.domain} is BACK UP. Resolving ${openIncidents.length} incidents.`);
-          await prisma.incident.updateMany({
-            where: {
-              siteId: site.id,
-              status: 'OPEN',
-              incidentType: 'UPTIME',
-            },
-            data: {
-              status: 'RESOLVED',
-              endedAt: new Date(),
-              summary: 'Website is back up and responding normally.',
-            },
-          });
+          for (const incident of openIncidents) {
+            await prisma.incident.update({
+              where: { id: incident.id },
+              data: {
+                status: 'RESOLVED',
+                endedAt: new Date(),
+                summary: 'Website is back up and responding normally.',
+              },
+            });
+            // Trigger alert dispatch for recovery
+            await dispatchNotifications(incident.id, 'INCIDENT_RESOLVED');
+          }
         }
       } else {
         // If site is DOWN, fetch last 3 checks to verify consecutive failure threshold
@@ -524,7 +623,7 @@ async function runUptimeChecks() {
 
           if (!activeIncident) {
             console.log(`[worker] Site ${site.domain} down for 3 consecutive checks. Opening INCIDENT.`);
-            await prisma.incident.create({
+            const newIncident = await prisma.incident.create({
               data: {
                 siteId: site.id,
                 incidentType: 'UPTIME',
@@ -538,6 +637,8 @@ async function runUptimeChecks() {
                 },
               },
             });
+            // Trigger alert dispatch for incident opened
+            await dispatchNotifications(newIncident.id, 'INCIDENT_OPENED');
           }
         }
       }
