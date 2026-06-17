@@ -69,6 +69,7 @@ export default function SitesPage() {
     Promise.resolve().then(() => {
       fetchSites();
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAddSite = async (e: React.FormEvent) => {

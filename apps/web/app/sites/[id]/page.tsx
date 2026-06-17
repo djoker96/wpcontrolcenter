@@ -121,6 +121,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     Promise.resolve().then(() => {
       fetchData();
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleSync = async () => {
