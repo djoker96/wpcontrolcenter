@@ -50,6 +50,25 @@ interface CoreInfo {
   updateAvailable: boolean;
 }
 
+interface UptimeCheckInfo {
+  id: string;
+  checkedAt: string;
+  statusCode: number | null;
+  responseTimeMs: number | null;
+  isUp: boolean;
+  errorMessage: string | null;
+}
+
+interface IncidentInfo {
+  id: string;
+  incidentType: string;
+  severity: string;
+  startedAt: string;
+  endedAt: string | null;
+  status: string;
+  summary: string | null;
+}
+
 export default function SiteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -62,6 +81,9 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   const [pluginsData, setPluginsData] = useState<PluginInfo[]>([]);
   const [themesData, setThemesData] = useState<ThemeInfo[]>([]);
   const [coreData, setCoreData] = useState<CoreInfo | null>(null);
+  const [uptimeRatio, setUptimeRatio] = useState<number>(100);
+  const [uptimeChecks, setUptimeChecks] = useState<UptimeCheckInfo[]>([]);
+  const [incidentsList, setIncidentsList] = useState<IncidentInfo[]>([]);
 
   // Loading States
   const [loading, setLoading] = useState(true);
@@ -112,6 +134,25 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       if (coreRes.ok) {
         const coreJson = await coreRes.json();
         setCoreData(coreJson);
+      }
+
+      // Fetch Uptime
+      const uptimeRes = await fetch(`http://localhost:3003/api/sites/${id}/uptime`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (uptimeRes.ok) {
+        const uptimeJson = await uptimeRes.json();
+        setUptimeRatio(uptimeJson.uptimeRatio);
+        setUptimeChecks(uptimeJson.data || []);
+      }
+
+      // Fetch Incidents
+      const incidentsRes = await fetch(`http://localhost:3003/api/sites/${id}/incidents`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (incidentsRes.ok) {
+        const incidentsJson = await incidentsRes.json();
+        setIncidentsList(incidentsJson.data || []);
       }
 
     } catch (err) {
@@ -254,6 +295,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
             { id: "plugins", label: `Plugins (${pluginsData.length})` },
             { id: "themes", label: `Themes (${themesData.length})` },
             { id: "core", label: "Core Version" },
+            { id: "uptime", label: `Uptime & Incidents (${incidentsList.filter(i => i.status === "OPEN").length})` },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -430,6 +472,116 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                 ) : (
                   <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-4 text-sm text-emerald-400">
                     Your WordPress core version is fully up to date!
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "uptime" && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h3 className="text-lg font-bold text-white font-heading">Uptime & Outages</h3>
+                <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-2 flex items-center gap-2">
+                  <span className="text-zinc-500 text-xs uppercase font-semibold">24h Uptime Ratio</span>
+                  <span className={`text-lg font-extrabold ${uptimeRatio >= 99 ? "text-emerald-400" : "text-yellow-500"}`}>
+                    {uptimeRatio}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Incidents Section */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Incidents Registry</h4>
+                {incidentsList.length === 0 ? (
+                  <div className="rounded-lg border border-zinc-900 bg-zinc-950/40 p-4 text-center text-zinc-500 text-sm">
+                    No incidents logged for this site.
+                  </div>
+                ) : (
+                  <div className="overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900/20">
+                    <table className="w-full border-collapse text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-900 bg-zinc-900/40 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                          <th className="p-4">Incident Type</th>
+                          <th className="p-4">Summary</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4">Duration</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-900">
+                        {incidentsList.map((inc) => (
+                          <tr key={inc.id} className="hover:bg-zinc-900/30 transition">
+                            <td className="p-4 font-mono font-semibold text-white">{inc.incidentType}</td>
+                            <td className="p-4 text-zinc-300">{inc.summary || "No description provided"}</td>
+                            <td className="p-4">
+                              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                inc.status === "OPEN"
+                                  ? "bg-red-950/40 text-red-400 border border-red-900/30"
+                                  : "bg-emerald-950/40 text-emerald-400 border border-emerald-900/30"
+                              }`}>
+                                {inc.status}
+                              </span>
+                            </td>
+                            <td className="p-4 text-zinc-400 text-xs">
+                              <div>Start: {new Date(inc.startedAt).toLocaleString()}</div>
+                              {inc.endedAt ? (
+                                <div>End: {new Date(inc.endedAt).toLocaleString()}</div>
+                              ) : (
+                                <div className="text-red-400">Active (Ongoing)</div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Ping Log History */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Recent Ping Logs</h4>
+                {uptimeChecks.length === 0 ? (
+                  <div className="rounded-lg border border-zinc-900 bg-zinc-950/40 p-4 text-center text-zinc-500 text-sm">
+                    No ping checks recorded yet.
+                  </div>
+                ) : (
+                  <div className="overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900/20">
+                    <table className="w-full border-collapse text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-900 bg-zinc-900/40 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                          <th className="p-4">Timestamp</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4">Response Time</th>
+                          <th className="p-4">Log</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-900">
+                        {uptimeChecks.map((check) => (
+                          <tr key={check.id} className="hover:bg-zinc-900/30 transition">
+                            <td className="p-4 text-zinc-400 text-xs">{new Date(check.checkedAt).toLocaleString()}</td>
+                            <td className="p-4">
+                              <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                                check.isUp
+                                  ? "bg-emerald-950/40 text-emerald-400 border border-emerald-900/30"
+                                  : "bg-red-950/40 text-red-400 border border-red-900/30"
+                              }`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${
+                                  check.isUp ? "bg-emerald-500" : "bg-red-500"
+                                }`} />
+                                {check.isUp ? "ONLINE" : "OFFLINE"}
+                              </span>
+                            </td>
+                            <td className="p-4 text-white font-semibold">
+                              {check.responseTimeMs !== null ? `${check.responseTimeMs} ms` : "—"}
+                            </td>
+                            <td className="p-4 text-zinc-400 text-xs">
+                              {check.errorMessage || `HTTP ${check.statusCode || "OK"}`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
