@@ -1,6 +1,6 @@
 import { Worker, Job as BullJob } from 'bullmq';
-import { PrismaClient, JobStatus, LogLevel, AuditResult } from '@wpcc/database';
-import { createDecipheriv, createHmac } from 'node:crypto';
+import { PrismaClient, JobStatus, LogLevel, AuditResult, AnalyticsSource } from '@wpcc/database';
+import { createDecipheriv, createHmac, createCipheriv, randomBytes } from 'node:crypto';
 import * as dotenv from 'dotenv';
 import { setInterval } from 'node:timers';
 import * as path from 'node:path';
@@ -26,6 +26,19 @@ function decrypt(encryptedText: string, secretKeyHex: string): string {
   let decrypted = decipher.update(encrypted, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
   return decrypted;
+}
+
+function encrypt(text: string, secretKeyHex: string): string {
+  const key = Buffer.from(secretKeyHex, 'hex');
+  const iv = randomBytes(12);
+  const cipher = createCipheriv(ALGORITHM, key, iv);
+  
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  
+  const authTag = cipher.getAuthTag().toString('hex');
+  
+  return `${iv.toString('hex')}:${encrypted}:${authTag}`;
 }
 
 function getEncryptionKey(): string {
@@ -534,6 +547,325 @@ async function runUptimeChecks() {
   }
 }
 
+async function getValidAccessToken(accountId: string): Promise<string> {
+  const account = await prisma.integrationAccount.findUnique({
+    where: { id: accountId },
+  });
+
+  if (!account) {
+    throw new Error(`Integration account with ID ${accountId} not found`);
+  }
+
+  const encKey = getEncryptionKey();
+  const isExpired = !account.expiresAt || account.expiresAt.getTime() - 60000 < Date.now();
+
+  if (!isExpired) {
+    return decrypt(account.accessTokenEncrypted, encKey);
+  }
+
+  if (!account.refreshTokenEncrypted) {
+    throw new Error('Refresh token is missing');
+  }
+
+  const refreshToken = decrypt(account.refreshTokenEncrypted, encKey);
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('Google OAuth configurations are missing');
+  }
+
+  const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  });
+
+  if (!refreshResponse.ok) {
+    await prisma.integrationAccount.update({
+      where: { id: accountId },
+      data: { status: 'ERROR' },
+    });
+    throw new Error(`Failed to refresh Google OAuth token`);
+  }
+
+  const refreshData = (await refreshResponse.json()) as any;
+  const newAccessToken = refreshData.access_token;
+  const newExpiresIn = refreshData.expires_in;
+
+  const newAccessTokenEncrypted = encrypt(newAccessToken, encKey);
+  const newExpiresAt = new Date(Date.now() + newExpiresIn * 1000);
+
+  await prisma.integrationAccount.update({
+    where: { id: accountId },
+    data: {
+      accessTokenEncrypted: newAccessTokenEncrypted,
+      expiresAt: newExpiresAt,
+      status: 'ACTIVE',
+    },
+  });
+
+  return newAccessToken;
+}
+
+async function syncAnalyticsData() {
+  console.log(`[worker] Starting Google Analytics and Search Console synchronization...`);
+  try {
+    const integrations = await prisma.siteIntegration.findMany({
+      where: {
+        provider: 'GOOGLE',
+        status: 'ACTIVE',
+      },
+      include: {
+        site: true,
+      },
+    });
+
+    const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = new Date().toISOString().split('T')[0];
+
+    for (const integration of integrations) {
+      console.log(`[worker] Syncing analytics for site ${integration.site.domain}...`);
+      try {
+        const accessToken = await getValidAccessToken(integration.integrationAccountId);
+
+        // 1. Sync GA4 Data
+        if (integration.externalPropertyId) {
+          // GA4 Daily
+          const ga4DailyRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${integration.externalPropertyId}:runReport`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              dateRanges: [{ startDate: startDateStr, endDate: endDateStr }],
+              dimensions: [{ name: 'date' }],
+              metrics: [
+                { name: 'sessions' },
+                { name: 'activeUsers' },
+                { name: 'screenPageViews' }
+              ],
+            }),
+          });
+
+          if (ga4DailyRes.ok) {
+            const ga4DailyData = (await ga4DailyRes.json()) as any;
+            if (ga4DailyData.rows) {
+              for (const row of ga4DailyData.rows) {
+                const dateRaw = row.dimensionValues[0].value;
+                const metricDate = new Date(
+                  Number(dateRaw.slice(0, 4)),
+                  Number(dateRaw.slice(4, 6)) - 1,
+                  Number(dateRaw.slice(6, 8))
+                );
+
+                const sessions = Number(row.metricValues[0].value || 0);
+                const users = Number(row.metricValues[1].value || 0);
+                const pageviews = Number(row.metricValues[2].value || 0);
+
+                await prisma.analyticsDaily.upsert({
+                  where: {
+                    siteId_metricDate_source: {
+                      siteId: integration.siteId,
+                      metricDate,
+                      source: AnalyticsSource.GA4,
+                    },
+                  },
+                  update: { sessions, users, pageviews },
+                  create: {
+                    siteId: integration.siteId,
+                    metricDate,
+                    source: AnalyticsSource.GA4,
+                    sessions,
+                    users,
+                    pageviews,
+                  },
+                });
+              }
+            }
+          }
+
+          // GA4 Top Pages
+          const ga4PagesRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${integration.externalPropertyId}:runReport`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              dateRanges: [{ startDate: startDateStr, endDate: endDateStr }],
+              dimensions: [{ name: 'date' }, { name: 'pagePath' }, { name: 'pageTitle' }],
+              metrics: [{ name: 'screenPageViews' }, { name: 'sessions' }],
+              limit: 20,
+            }),
+          });
+
+          if (ga4PagesRes.ok) {
+            const ga4PagesData = (await ga4PagesRes.json()) as any;
+            if (ga4PagesData.rows) {
+              for (const row of ga4PagesData.rows) {
+                const dateRaw = row.dimensionValues[0].value;
+                const metricDate = new Date(
+                  Number(dateRaw.slice(0, 4)),
+                  Number(dateRaw.slice(4, 6)) - 1,
+                  Number(dateRaw.slice(6, 8))
+                );
+                const pagePath = row.dimensionValues[1].value || '/';
+                const pageTitle = row.dimensionValues[2].value || '';
+                const pageviews = Number(row.metricValues[0].value || 0);
+                const sessions = Number(row.metricValues[1].value || 0);
+
+                await prisma.topPageDaily.deleteMany({
+                  where: {
+                    siteId: integration.siteId,
+                    metricDate,
+                    source: AnalyticsSource.GA4,
+                    pagePath,
+                  },
+                });
+
+                await prisma.topPageDaily.create({
+                  data: {
+                    siteId: integration.siteId,
+                    metricDate,
+                    source: AnalyticsSource.GA4,
+                    pagePath,
+                    pageTitle,
+                    pageviews,
+                    sessions,
+                  },
+                });
+              }
+            }
+          }
+        }
+
+        // 2. Sync GSC Data
+        if (integration.externalSiteIdentifier) {
+          // GSC Daily
+          const gscDailyRes = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(integration.externalSiteIdentifier)}/searchAnalytics/query`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              startDate: startDateStr,
+              endDate: endDateStr,
+              dimensions: ['date'],
+            }),
+          });
+
+          if (gscDailyRes.ok) {
+            const gscDailyData = (await gscDailyRes.json()) as any;
+            if (gscDailyData.rows) {
+              for (const row of gscDailyData.rows) {
+                const metricDate = new Date(row.keys[0]);
+                const clicks = Number(row.clicks || 0);
+                const impressions = Number(row.impressions || 0);
+                const ctr = Number(row.ctr || 0);
+                const avgPosition = Number(row.position || 0);
+
+                await prisma.analyticsDaily.upsert({
+                  where: {
+                    siteId_metricDate_source: {
+                      siteId: integration.siteId,
+                      metricDate,
+                      source: AnalyticsSource.GSC,
+                    },
+                  },
+                  update: { clicks, impressions, ctr, avgPosition },
+                  create: {
+                    siteId: integration.siteId,
+                    metricDate,
+                    source: AnalyticsSource.GSC,
+                    clicks,
+                    impressions,
+                    ctr,
+                    avgPosition,
+                  },
+                });
+              }
+            }
+          }
+
+          // GSC Top Pages
+          const gscPagesRes = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(integration.externalSiteIdentifier)}/searchAnalytics/query`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              startDate: startDateStr,
+              endDate: endDateStr,
+              dimensions: ['date', 'page'],
+              rowLimit: 20,
+            }),
+          });
+
+          if (gscPagesRes.ok) {
+            const gscPagesData = (await gscPagesRes.json()) as any;
+            if (gscPagesData.rows) {
+              for (const row of gscPagesData.rows) {
+                const metricDate = new Date(row.keys[0]);
+                const fullPageUrl = row.keys[1] || '/';
+                let pagePath = fullPageUrl;
+                try {
+                  const urlObj = new URL(fullPageUrl);
+                  pagePath = urlObj.pathname + urlObj.search;
+                } catch {
+                  // Fallback
+                }
+
+                const clicks = Number(row.clicks || 0);
+                const impressions = Number(row.impressions || 0);
+                const ctr = Number(row.ctr || 0);
+                const avgPosition = Number(row.position || 0);
+
+                await prisma.topPageDaily.deleteMany({
+                  where: {
+                    siteId: integration.siteId,
+                    metricDate,
+                    source: AnalyticsSource.GSC,
+                    pagePath,
+                  },
+                });
+
+                await prisma.topPageDaily.create({
+                  data: {
+                    siteId: integration.siteId,
+                    metricDate,
+                    source: AnalyticsSource.GSC,
+                    pagePath,
+                    clicks,
+                    impressions,
+                    ctr,
+                    avgPosition,
+                  },
+                });
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        console.error(`[worker] Failed to sync analytics for site ${integration.site.domain}: ${err.message}`);
+      }
+    }
+  } catch (error: any) {
+    console.error('[worker] Error running analytics synchronization:', error);
+  }
+}
+
 const intervalSeconds = process.env.UPTIME_CHECK_INTERVAL_SECONDS ? Number(process.env.UPTIME_CHECK_INTERVAL_SECONDS) : 300;
 console.log(`[worker] Uptime check interval configured to ${intervalSeconds}s`);
 
@@ -550,7 +882,9 @@ function tick(name: string): void {
   console.log(`[worker] ${name} tick at ${new Date().toISOString()}`);
 }
 
-setInterval(() => tick('analytics-sync'), 60 * 60 * 1000);
+setInterval(() => Promise.resolve().then(() => syncAnalyticsData()), 60 * 60 * 1000); // Sync actual analytics hourly
+Promise.resolve().then(() => syncAnalyticsData()); // Run once on startup
+
 setInterval(() => tick('dispatch-jobs'), 15 * 1000);
 
 console.log('Worker bootstrap with BullMQ Worker started successfully');
