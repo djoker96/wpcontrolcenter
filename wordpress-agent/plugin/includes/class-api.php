@@ -48,6 +48,23 @@ class WPCC_Agent_API {
 
     public function execute_action(WP_REST_Request $request): WP_REST_Response {
         $action = $request->get_param('action');
+        if ($action === 'sync-inventory') {
+            $system_info = (new WPCC_Agent_System_Info())->collect();
+            $plugins = (new WPCC_Agent_Plugin_Manager())->list_plugins();
+            $themes = (new WPCC_Agent_Theme_Manager())->list_themes();
+            $core = (new WPCC_Agent_Core_Manager())->version();
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => [
+                    'systemInfo' => $system_info,
+                    'plugins' => $plugins,
+                    'themes' => $themes,
+                    'core' => $core,
+                ],
+            ], 200);
+        }
+
         return new WP_REST_Response([
             'success' => true,
             'action' => $action,
