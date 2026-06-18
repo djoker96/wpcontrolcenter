@@ -55,6 +55,8 @@ enum JobType {
   UPDATE_ROBOTS_TXT
   UPDATE_HTACCESS
   UPDATE_PHP_CONFIG
+  CREATE_BACKUP
+  RESTORE_BACKUP
 }
 
 enum JobStatus {
@@ -191,6 +193,7 @@ model Site {
   integrations       SiteIntegration[]
   diagnostics        SiteDiagnostics?
   performanceAudits  SitePerformanceAudit[]
+  backups            SiteBackup[]
 
   @@index([status])
   @@index([connectionStatus])
@@ -572,6 +575,37 @@ model PasswordResetToken {
 
   @@index([tokenHash])
   @@map("password_reset_tokens")
+}
+
+enum BackupStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum BackupType {
+  FULL
+  DATABASE
+  FILES
+}
+
+model SiteBackup {
+  id           String       @id @default(cuid())
+  siteId       String       @map("site_id")
+  backupType   BackupType   @map("backup_type")
+  filename     String
+  sizeBytes    Float?       @map("size_bytes")
+  status       BackupStatus @default(PENDING)
+  errorMessage String?      @map("error_message")
+  downloadUrl  String?      @map("download_url")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  site         Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@map("site_backups")
 }
 
 
