@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { API_URL } from "@/lib/api";
 
 interface IntegrationAccount {
   id: string;
@@ -31,7 +32,7 @@ function IntegrationsContent() {
 
     try {
       setLoading(true);
-      const res = await fetch("http://localhost:3003/api/integrations", {
+      const res = await fetch(`${API_URL}/integrations`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to load integrations");
@@ -58,7 +59,7 @@ function IntegrationsContent() {
     setError("");
     setSuccessMsg("");
     try {
-      const res = await fetch("http://localhost:3003/api/integrations/google/callback", {
+      const res = await fetch(`${API_URL}/integrations/google/callback`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -99,7 +100,7 @@ function IntegrationsContent() {
     setConnecting(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:3003/api/integrations/google/connect", {
+      const res = await fetch(`${API_URL}/integrations/google/connect`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });

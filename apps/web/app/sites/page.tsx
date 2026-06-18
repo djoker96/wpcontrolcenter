@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { API_URL } from "@/lib/api";
 
 interface Site {
   id: string;
@@ -40,7 +41,7 @@ export default function SitesPage() {
     }
 
     try {
-      const response = await fetch("http://localhost:3003/api/sites", {
+      const response = await fetch(`${API_URL}/sites`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -79,7 +80,7 @@ export default function SitesPage() {
 
     const token = localStorage.getItem("wpcc_token");
     try {
-      const response = await fetch("http://localhost:3003/api/sites", {
+      const response = await fetch(`${API_URL}/sites`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
