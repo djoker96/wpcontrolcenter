@@ -184,6 +184,23 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   const [phpLogsLines, setPhpLogsLines] = useState(100);
   const [loadingPhpLogs, setLoadingPhpLogs] = useState(false);
 
+  // Performance & Speed State
+  interface PerformanceAudit {
+    id: string;
+    performanceScore: number;
+    accessibilityScore: number;
+    bestPracticesScore: number;
+    seoScore: number;
+    lcpMs: number | null;
+    inpMs: number | null;
+    cls: number | null;
+    auditedAt: string;
+  }
+
+  const [performanceHistory, setPerformanceHistory] = useState<PerformanceAudit[]>([]);
+  const [loadingPerformance, setLoadingPerformance] = useState(false);
+  const [runningSpeedTest, setRunningSpeedTest] = useState(false);
+
   const handleMapSite = async () => {
     const token = localStorage.getItem("wpcc_token");
     if (!token || !selectedAccountId) return;
@@ -353,12 +370,61 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     }
   };
 
+  const fetchPerformanceData = async () => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+
+    setLoadingPerformance(true);
+    try {
+      const res = await fetch(`http://localhost:3003/api/sites/${id}/performance`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const json = await res.json() as { audits: PerformanceAudit[] };
+        setPerformanceHistory(json.audits || []);
+      }
+    } catch (err: unknown) {
+      console.error("Failed to load performance metrics:", err);
+    } finally {
+      setLoadingPerformance(false);
+    }
+  };
+
+  const runSpeedTest = async () => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+
+    setRunningSpeedTest(true);
+    setError("");
+    try {
+      const res = await fetch(`http://localhost:3003/api/sites/${id}/performance/refresh`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errJson = await res.json() as { message?: string };
+        throw new Error(errJson.message || "Speed test failed. Domain must be public and reachable.");
+      }
+      const json = await res.json() as { data: PerformanceAudit };
+      setPerformanceHistory((prev) => [json.data, ...prev]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Speed test failed";
+      setError(msg);
+    } finally {
+      setRunningSpeedTest(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === "diagnostics") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchDiagnostics();
       // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchPhpLogsData();
+    }
+    if (activeTab === "performance") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchPerformanceData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
@@ -603,6 +669,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
             { id: "maintenance", label: "Maintenance & Tools" },
             { id: "analytics", label: "Analytics & SEO" },
             { id: "diagnostics", label: "Server Diagnostics" },
+            { id: "performance", label: "Performance & Speed" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -1467,6 +1534,124 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                       )}
                     </div>
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "performance" && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="flex justify-between items-center border-b border-zinc-900 pb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white font-heading">Performance & Speed Audits</h3>
+                  <p className="text-xs text-zinc-500 mt-1">Audit Lighthouse scores and Core Web Vitals metrics via PageSpeed Insights.</p>
+                </div>
+                <Button
+                  onClick={runSpeedTest}
+                  disabled={runningSpeedTest}
+                  className="bg-violet-600 hover:bg-violet-500 text-white font-semibold py-2 px-4 rounded-lg"
+                >
+                  {runningSpeedTest ? "Running Lighthouse Audits..." : "Run Speed Test"}
+                </Button>
+              </div>
+
+              {performanceHistory.length > 0 ? (
+                <div className="space-y-6">
+                  {/* Latest Scores Row */}
+                  {(() => {
+                    const latest = performanceHistory[0];
+                    const getScoreColor = (score: number) => {
+                      if (score >= 90) return "text-emerald-400 border-emerald-500/30 bg-emerald-950/20";
+                      if (score >= 50) return "text-yellow-500 border-yellow-500/30 bg-yellow-950/20";
+                      return "text-red-400 border-red-500/30 bg-red-950/20";
+                    };
+
+                    return (
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        {[
+                          { name: "Performance", score: latest.performanceScore },
+                          { name: "Accessibility", score: latest.accessibilityScore },
+                          { name: "Best Practices", score: latest.bestPracticesScore },
+                          { name: "SEO", score: latest.seoScore },
+                        ].map((item) => (
+                          <div key={item.name} className={`rounded-xl border p-6 flex flex-col items-center justify-center text-center ${getScoreColor(item.score)}`}>
+                            <div className="text-3xl font-extrabold font-mono">{item.score}</div>
+                            <div className="text-xs font-semibold mt-2 text-zinc-300">{item.name}</div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Core Web Vitals Card */}
+                  {(() => {
+                    const latest = performanceHistory[0];
+                    const renderVital = (name: string, value: number | null, unit: string, goodMax: number, poorMin: number) => {
+                      if (value === null) return "—";
+                      const isGood = value <= goodMax;
+                      const isPoor = value >= poorMin;
+                      const statusColor = isGood ? "text-emerald-400 bg-emerald-950/30" : isPoor ? "text-red-400 bg-red-950/30" : "text-yellow-500 bg-yellow-950/30";
+                      const label = isGood ? "Good" : isPoor ? "Poor" : "Needs Improvement";
+                      
+                      return (
+                        <div className="flex justify-between items-center py-2 text-sm font-mono border-b border-zinc-900 last:border-0">
+                          <span className="text-zinc-400 font-sans">{name}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-white font-bold">{value.toFixed(0)}{unit}</span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusColor}`}>{label}</span>
+                          </div>
+                        </div>
+                      );
+                    };
+
+                    return (
+                      <div className="rounded-xl border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                        <h4 className="text-sm font-semibold text-white">Core Web Vitals Assessment</h4>
+                        <div className="divide-y divide-zinc-900">
+                          {renderVital("Largest Contentful Paint (LCP)", latest.lcpMs, "ms", 2500, 4000)}
+                          {renderVital("Speed Index / Interactive (INP)", latest.inpMs, "ms", 200, 500)}
+                          {renderVital("Cumulative Layout Shift (CLS)", latest.cls ? latest.cls * 1000 : null, "", 100, 250)}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* History Audits Table */}
+                  <div className="rounded-xl border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                    <h4 className="text-sm font-semibold text-white">Audit History</h4>
+                    <div className="overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900/10">
+                      <table className="w-full border-collapse text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-zinc-900 bg-zinc-900/40 text-zinc-400 font-semibold uppercase">
+                            <th className="p-3">Audited At</th>
+                            <th className="p-3 text-center">Perf</th>
+                            <th className="p-3 text-center">A11y</th>
+                            <th className="p-3 text-center">Best Pract</th>
+                            <th className="p-3 text-center">SEO</th>
+                            <th className="p-3 text-right">LCP</th>
+                            <th className="p-3 text-right">INP</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-900 font-mono text-zinc-300">
+                          {performanceHistory.map((audit) => (
+                            <tr key={audit.id} className="hover:bg-zinc-900/20">
+                              <td className="p-3 text-zinc-500 font-sans">{new Date(audit.auditedAt).toLocaleString()}</td>
+                              <td className={`p-3 text-center font-bold ${audit.performanceScore >= 90 ? 'text-emerald-400' : audit.performanceScore >= 50 ? 'text-yellow-500' : 'text-red-400'}`}>{audit.performanceScore}</td>
+                              <td className="p-3 text-center">{audit.accessibilityScore}</td>
+                              <td className="p-3 text-center">{audit.bestPracticesScore}</td>
+                              <td className="p-3 text-center">{audit.seoScore}</td>
+                              <td className="p-3 text-right">{audit.lcpMs ? `${audit.lcpMs.toFixed(0)}ms` : '—'}</td>
+                              <td className="p-3 text-right">{audit.inpMs ? `${audit.inpMs.toFixed(0)}ms` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-zinc-900 bg-zinc-950/40 p-10 text-center text-zinc-500 text-sm italic">
+                  {loadingPerformance ? "Loading metrics..." : "No speed tests recorded yet. Run a test above to analyze performance."}
                 </div>
               )}
             </div>
