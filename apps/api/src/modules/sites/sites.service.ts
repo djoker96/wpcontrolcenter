@@ -6,6 +6,7 @@ import { encrypt, decrypt } from '../../common/utils/crypto.utils';
 import { randomBytes, createHmac } from 'node:crypto';
 import { Queue } from 'bullmq';
 import { JobType, JobTargetType } from '@wpcc/database';
+import { getAgentEncryptionKey } from '../../config/env';
 
 @Injectable()
 export class SitesService {
@@ -14,20 +15,12 @@ export class SitesService {
     @Inject('JOBS_QUEUE') private readonly jobsQueue: Queue,
   ) {}
 
-  private getEncryptionKey(): string {
-    const key = process.env.AGENT_ENCRYPTION_KEY;
-    if (!key) {
-      throw new Error('AGENT_ENCRYPTION_KEY environment variable is missing');
-    }
-    return key;
-  }
-
   async create(createSiteDto: CreateSiteDto) {
     const connectionToken = `wpcc_tok_${randomBytes(16).toString('hex')}`;
     const publicKey = `pub_${randomBytes(12).toString('hex')}`;
     const secretKey = randomBytes(16).toString('hex');
 
-    const encKey = this.getEncryptionKey();
+    const encKey = getAgentEncryptionKey();
     const connectionTokenEncrypted = encrypt(connectionToken, encKey);
     const secretKeyEncrypted = encrypt(secretKey, encKey);
 
@@ -131,7 +124,7 @@ export class SitesService {
   async generateConnectionToken(id: string) {
     await this.findOne(id);
     const connectionToken = `wpcc_tok_${randomBytes(16).toString('hex')}`;
-    const encKey = this.getEncryptionKey();
+    const encKey = getAgentEncryptionKey();
     const connectionTokenEncrypted = encrypt(connectionToken, encKey);
 
     await this.prisma.siteCredential.update({
@@ -151,7 +144,7 @@ export class SitesService {
     await this.findOne(id);
     const publicKey = `pub_${randomBytes(12).toString('hex')}`;
     const secretKey = randomBytes(16).toString('hex');
-    const encKey = this.getEncryptionKey();
+    const encKey = getAgentEncryptionKey();
     const secretKeyEncrypted = encrypt(secretKey, encKey);
 
     await this.prisma.siteCredential.update({
@@ -184,7 +177,7 @@ export class SitesService {
       throw new BadRequestException('Site is not connected or missing credentials');
     }
 
-    const secretKey = decrypt(site.credential.secretKeyEncrypted, this.getEncryptionKey());
+    const secretKey = decrypt(site.credential.secretKeyEncrypted, getAgentEncryptionKey());
     const method = 'POST';
     const path = '/wpcc/v1/execute/sync-inventory';
     const timestamp = Math.floor(Date.now() / 1000).toString();

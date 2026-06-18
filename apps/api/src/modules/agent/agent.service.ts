@@ -2,21 +2,18 @@ import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/
 import { PrismaService } from '../database/prisma.service';
 import { decrypt } from '../../common/utils/crypto.utils';
 import { ConnectionStatus } from '@wpcc/database';
+import { getAgentEncryptionKey } from '../../config/env';
 
 @Injectable()
 export class AgentService {
   constructor(private readonly prisma: PrismaService) {}
-
-  private getEncryptionKey(): string {
-    return process.env.AGENT_ENCRYPTION_KEY || '6a66632c253d82a17cb0b51de38e8cb554c8651a24d852a35368a5436d4f9bf3';
-  }
 
   async register(connectionToken: string, siteUrl: string, domain: string) {
     if (!connectionToken) {
       throw new BadRequestException('Connection token is required');
     }
 
-    const encKey = this.getEncryptionKey();
+    const encKey = getAgentEncryptionKey();
 
     // Fetch credentials that are active (have connection token)
     const credentialsList = await this.prisma.siteCredential.findMany({

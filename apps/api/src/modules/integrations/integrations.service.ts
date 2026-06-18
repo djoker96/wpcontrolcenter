@@ -2,18 +2,11 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../database/prisma.service';
 import { encrypt, decrypt } from '../../common/utils/crypto.utils';
 import { IntegrationProvider, IntegrationStatus } from '@wpcc/database';
+import { getAgentEncryptionKey } from '../../config/env';
 
 @Injectable()
 export class IntegrationsService {
   constructor(private readonly prisma: PrismaService) {}
-
-  private getEncryptionKey(): string {
-    const key = process.env.AGENT_ENCRYPTION_KEY;
-    if (!key) {
-      throw new Error('AGENT_ENCRYPTION_KEY environment variable is missing');
-    }
-    return key;
-  }
 
   getGoogleAuthUrl(): string {
     const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -86,7 +79,7 @@ export class IntegrationsService {
       accountEmail = userInfo.email || null;
     }
 
-    const encKey = this.getEncryptionKey();
+    const encKey = getAgentEncryptionKey();
     const accessTokenEncrypted = encrypt(accessToken, encKey);
     const refreshTokenEncrypted = refreshToken ? encrypt(refreshToken, encKey) : undefined;
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
@@ -143,7 +136,7 @@ export class IntegrationsService {
       throw new NotFoundException(`Integration account with ID ${accountId} not found`);
     }
 
-    const encKey = this.getEncryptionKey();
+    const encKey = getAgentEncryptionKey();
 
     // Check if token is expired or expires in next 60 seconds
     const isExpired = !account.expiresAt || account.expiresAt.getTime() - 60000 < Date.now();

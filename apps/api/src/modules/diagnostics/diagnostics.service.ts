@@ -2,18 +2,11 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../database/prisma.service';
 import { decrypt } from '../../common/utils/crypto.utils';
 import { createHmac } from 'node:crypto';
+import { getAgentEncryptionKey } from '../../config/env';
 
 @Injectable()
 export class DiagnosticsService {
   constructor(private readonly prisma: PrismaService) {}
-
-  private getEncryptionKey(): string {
-    const key = process.env.AGENT_ENCRYPTION_KEY;
-    if (!key) {
-      throw new Error('AGENT_ENCRYPTION_KEY environment variable is missing');
-    }
-    return key;
-  }
 
   async getDiagnostics(siteId: string) {
     const site = await this.prisma.site.findUnique({
@@ -50,7 +43,7 @@ export class DiagnosticsService {
       throw new BadRequestException('Cannot fetch logs from a disconnected site');
     }
 
-    const secretKey = decrypt(site.credential.secretKeyEncrypted, this.getEncryptionKey());
+    const secretKey = decrypt(site.credential.secretKeyEncrypted, getAgentEncryptionKey());
     const method = 'POST';
     const path = '/wpcc/v1/execute/php-logs';
     const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -113,7 +106,7 @@ export class DiagnosticsService {
       throw new BadRequestException('Cannot refresh diagnostics for a disconnected site');
     }
 
-    const secretKey = decrypt(site.credential.secretKeyEncrypted, this.getEncryptionKey());
+    const secretKey = decrypt(site.credential.secretKeyEncrypted, getAgentEncryptionKey());
     const method = 'POST';
     const path = '/wpcc/v1/execute/diagnostics';
     const timestamp = Math.floor(Date.now() / 1000).toString();

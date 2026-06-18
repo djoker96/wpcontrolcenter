@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../modules/database/prisma.service';
 import { decrypt } from '../utils/crypto.utils';
+import { getAgentEncryptionKey } from '../../config/env';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -33,10 +34,7 @@ export class AgentGuard implements CanActivate {
       throw new UnauthorizedException('Invalid site credentials');
     }
 
-    const encKey = process.env.AGENT_ENCRYPTION_KEY;
-    if (!encKey) {
-      throw new Error('AGENT_ENCRYPTION_KEY environment variable is missing');
-    }
+    const encKey = getAgentEncryptionKey();
     let secretKey = '';
     try {
       secretKey = decrypt(credentials.secretKeyEncrypted, encKey);

@@ -1,5 +1,6 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
+import { getJwtSecret } from '../../config/env';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -16,11 +17,14 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid token format');
     }
 
+    let secret: string;
     try {
-      const secret = process.env.JWT_SECRET;
-      if (!secret) {
-        throw new Error('JWT_SECRET environment variable is missing');
-      }
+      secret = getJwtSecret();
+    } catch (error) {
+      throw new InternalServerErrorException(error instanceof Error ? error.message : 'JWT_SECRET environment variable is missing');
+    }
+
+    try {
       const decoded = jwt.verify(token, secret) as any;
       request.user = decoded;
       return true;
