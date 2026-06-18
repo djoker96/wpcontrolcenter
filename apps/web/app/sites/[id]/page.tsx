@@ -4,6 +4,7 @@ import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { API_URL } from "@/lib/api";
 
 interface SiteOverview {
   name: string;
@@ -175,9 +176,27 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     lastDiagnosticsAt: string;
   }
 
+  interface BackupInfo {
+    id: string;
+    siteId: string;
+    backupType: string;
+    filename: string;
+    sizeBytes: number | null;
+    status: string;
+    errorMessage: string | null;
+    downloadUrl: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }
+
   const [diagnosticsData, setDiagnosticsData] = useState<DiagnosticsData | null>(null);
   const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
   const [refreshingDiagnostics, setRefreshingDiagnostics] = useState(false);
+
+  // Backups State
+  const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [creatingBackup, setCreatingBackup] = useState(false);
 
   // PHP Error Logs State
   const [phpLogs, setPhpLogs] = useState("");
@@ -208,7 +227,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setMappingLoading(true);
     setError("");
     try {
-      const res = await fetch(`http://localhost:3003/api/integrations/sites/${id}/map`, {
+      const res = await fetch(`${API_URL}/integrations/sites/${id}/map`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -241,7 +260,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       const token = localStorage.getItem("wpcc_token");
       if (!token) return;
       try {
-        const res = await fetch(`http://localhost:3003/api/integrations/google/properties?accountId=${selectedAccountId}`, {
+        const res = await fetch(`${API_URL}/integrations/google/properties?accountId=${selectedAccountId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -261,7 +280,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     if (!token) return;
 
     try {
-      const accountsRes = await fetch("http://localhost:3003/api/integrations", {
+      const accountsRes = await fetch(`${API_URL}/integrations`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (accountsRes.ok) {
@@ -278,7 +297,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
     if (overviewData?.ga4PropertyId || overviewData?.gscSiteUrl) {
       try {
-        const analyticsRes = await fetch(`http://localhost:3003/api/analytics/sites/${id}?range=${range}`, {
+        const analyticsRes = await fetch(`${API_URL}/analytics/sites/${id}?range=${range}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (analyticsRes.ok) {
@@ -301,6 +320,125 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, analyticsRange, overviewData?.ga4PropertyId, overviewData?.gscSiteUrl]);
 
+  const fetchBackups = async () => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+
+    setLoadingBackups(true);
+    try {
+      const res = await fetch(`${API_URL}/sites/${id}/backups`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to fetch backups");
+      const json = await res.json();
+      setBackups(Array.isArray(json) ? json : []);
+    } catch (err) {
+      console.error('Failed to load backups', err);
+    } finally {
+      setLoadingBackups(false);
+    }
+  };
+
+  const handleCreateBackup = async (type: string) => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+
+    setCreatingBackup(true);
+    try {
+      const res = await fetch(`${API_URL}/sites/${id}/backups`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ backupType: type }),
+      });
+      if (res.ok) {
+        alert("Backup job created successfully!");
+        fetchBackups();
+        fetchData(); // refresh overview jobs
+      } else {
+        const body = await res.json();
+        throw new Error(body.message || "Failed to create backup");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "An error occurred";
+      alert(`Error: ${msg}`);
+      console.error(err);
+    } finally {
+      setCreatingBackup(false);
+    }
+  };
+
+  const handleRestoreBackup = async (backupId: string) => {
+    if (!confirm('Are you sure you want to restore this backup? This will overwrite your current site data.')) return;
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/sites/${id}/backups/${backupId}/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert("Restore job created successfully! Check job logs shortly.");
+        fetchData();
+      } else {
+        const body = await res.json();
+        throw new Error(body.message || "Failed to trigger restore");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "An error occurred";
+      alert(`Error: ${msg}`);
+      console.error(err);
+    }
+  };
+
+  const handleDeleteBackup = async (backupId: string) => {
+    if (!confirm('Permanently delete this backup?')) return;
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/sites/${id}/backups/${backupId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchBackups();
+      } else {
+        throw new Error("Failed to delete backup");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "An error occurred";
+      alert(`Error: ${msg}`);
+      console.error(err);
+    }
+  };
+
+  const handleDownloadBackup = async (backupId: string, filename: string) => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/sites/${id}/backups/${backupId}/download`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to download backup");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to download file");
+    }
+  };
+
   const fetchDiagnostics = async () => {
     const token = localStorage.getItem("wpcc_token");
     if (!token) return;
@@ -308,7 +446,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setLoadingDiagnostics(true);
     setError("");
     try {
-      const res = await fetch(`http://localhost:3003/api/sites/${id}/diagnostics`, {
+      const res = await fetch(`${API_URL}/sites/${id}/diagnostics`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to load site diagnostics");
@@ -329,7 +467,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setRefreshingDiagnostics(true);
     setError("");
     try {
-      const res = await fetch(`http://localhost:3003/api/sites/${id}/diagnostics/refresh`, {
+      const res = await fetch(`${API_URL}/sites/${id}/diagnostics/refresh`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -353,7 +491,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
     setLoadingPhpLogs(true);
     try {
-      const res = await fetch(`http://localhost:3003/api/sites/${id}/diagnostics/php-logs?lines=${linesNum}`, {
+      const res = await fetch(`${API_URL}/sites/${id}/diagnostics/php-logs?lines=${linesNum}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -376,7 +514,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
     setLoadingPerformance(true);
     try {
-      const res = await fetch(`http://localhost:3003/api/sites/${id}/performance`, {
+      const res = await fetch(`${API_URL}/sites/${id}/performance`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -397,7 +535,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setRunningSpeedTest(true);
     setError("");
     try {
-      const res = await fetch(`http://localhost:3003/api/sites/${id}/performance/refresh`, {
+      const res = await fetch(`${API_URL}/sites/${id}/performance/refresh`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -416,16 +554,26 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   };
 
   useEffect(() => {
-    if (activeTab === "diagnostics") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      fetchDiagnostics();
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      fetchPhpLogsData();
-    }
-    if (activeTab === "performance") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      fetchPerformanceData();
-    }
+    let isCurrent = true;
+
+    void Promise.resolve().then(() => {
+      if (!isCurrent) return;
+
+      if (activeTab === "diagnostics") {
+        void fetchDiagnostics();
+        void fetchPhpLogsData();
+      }
+      if (activeTab === "performance") {
+        void fetchPerformanceData();
+      }
+      if (activeTab === "backups") {
+        void fetchBackups();
+      }
+    });
+
+    return () => {
+      isCurrent = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
@@ -436,7 +584,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setActionRunning(true);
     setError("");
     try {
-      const res = await fetch(`http://localhost:3003/api/sites/${id}/actions/${action}`, {
+      const res = await fetch(`${API_URL}/sites/${id}/actions/${action}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -472,7 +620,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
     try {
       // Fetch overview
-      const overviewRes = await fetch(`http://localhost:3003/api/sites/${id}/overview`, {
+      const overviewRes = await fetch(`${API_URL}/sites/${id}/overview`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!overviewRes.ok) throw new Error("Failed to load overview data");
@@ -480,7 +628,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       setOverviewData(overviewJson.summary);
 
       // Fetch plugins
-      const pluginsRes = await fetch(`http://localhost:3003/api/sites/${id}/plugins`, {
+      const pluginsRes = await fetch(`${API_URL}/sites/${id}/plugins`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (pluginsRes.ok) {
@@ -489,7 +637,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       // Fetch themes
-      const themesRes = await fetch(`http://localhost:3003/api/sites/${id}/themes`, {
+      const themesRes = await fetch(`${API_URL}/sites/${id}/themes`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (themesRes.ok) {
@@ -498,7 +646,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       // Fetch core
-      const coreRes = await fetch(`http://localhost:3003/api/sites/${id}/core`, {
+      const coreRes = await fetch(`${API_URL}/sites/${id}/core`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (coreRes.ok) {
@@ -507,7 +655,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       // Fetch Uptime
-      const uptimeRes = await fetch(`http://localhost:3003/api/sites/${id}/uptime`, {
+      const uptimeRes = await fetch(`${API_URL}/sites/${id}/uptime`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (uptimeRes.ok) {
@@ -517,7 +665,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       // Fetch Incidents
-      const incidentsRes = await fetch(`http://localhost:3003/api/sites/${id}/incidents`, {
+      const incidentsRes = await fetch(`${API_URL}/sites/${id}/incidents`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (incidentsRes.ok) {
@@ -548,7 +696,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setError("");
 
     try {
-      const response = await fetch(`http://localhost:3003/api/sites/${id}/resync`, {
+      const response = await fetch(`${API_URL}/sites/${id}/resync`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -666,6 +814,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
             { id: "themes", label: `Themes (${themesData.length})` },
             { id: "core", label: "Core Version" },
             { id: "uptime", label: `Uptime & Incidents (${incidentsList.filter(i => i.status === "OPEN").length})` },
+            { id: "backups", label: "Backups" },
             { id: "maintenance", label: "Maintenance & Tools" },
             { id: "analytics", label: "Analytics & SEO" },
             { id: "diagnostics", label: "Server Diagnostics" },
@@ -1652,6 +1801,115 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
               ) : (
                 <div className="rounded-lg border border-zinc-900 bg-zinc-950/40 p-10 text-center text-zinc-500 text-sm italic">
                   {loadingPerformance ? "Loading metrics..." : "No speed tests recorded yet. Run a test above to analyze performance."}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "backups" && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="flex justify-between items-center border-b border-zinc-900 pb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white font-heading">Site Backups</h3>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Create and restore backups for your WordPress database, files, or complete installation.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleCreateBackup('DATABASE')}
+                    disabled={creatingBackup}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-3 py-1.5"
+                  >
+                    Backup Database
+                  </Button>
+                  <Button
+                    onClick={() => handleCreateBackup('FILES')}
+                    disabled={creatingBackup}
+                    className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-3 py-1.5"
+                  >
+                    Backup Files
+                  </Button>
+                  <Button
+                    onClick={() => handleCreateBackup('FULL')}
+                    disabled={creatingBackup}
+                    className="bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs px-3 py-1.5"
+                  >
+                    Full Backup
+                  </Button>
+                </div>
+              </div>
+
+              {loadingBackups && backups.length === 0 ? (
+                <div className="text-center py-10 text-zinc-500 text-sm">Loading backups...</div>
+              ) : backups.length === 0 ? (
+                <div className="text-center py-10 text-zinc-650 text-sm italic">No backups found for this site.</div>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900/20">
+                  <table className="w-full border-collapse text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-900 bg-zinc-900/40 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                        <th className="p-4">Date</th>
+                        <th className="p-4">Filename</th>
+                        <th className="p-4">Type</th>
+                        <th className="p-4">Size</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-900 text-white">
+                      {backups.map((bk) => (
+                        <tr key={bk.id} className="hover:bg-zinc-900/30 transition">
+                          <td className="p-4 text-xs text-zinc-400">{new Date(bk.createdAt).toLocaleString()}</td>
+                          <td className="p-4 font-mono text-xs text-zinc-300 break-all max-w-xs">{bk.filename}</td>
+                          <td className="p-4">
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700">
+                              {bk.backupType}
+                            </span>
+                          </td>
+                          <td className="p-4 text-zinc-450 font-mono text-xs">
+                            {bk.sizeBytes ? `${(bk.sizeBytes / (1024 * 1024)).toFixed(2)} MB` : '—'}
+                          </td>
+                          <td className="p-4">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              bk.status === 'COMPLETED' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30' :
+                              bk.status === 'FAILED' ? 'bg-red-950/40 text-red-400 border border-red-900/30' :
+                              'bg-yellow-950/40 text-yellow-500 border border-yellow-900/30'
+                            }`}>
+                              {bk.status}
+                            </span>
+                            {bk.status === 'FAILED' && bk.errorMessage && (
+                              <div className="text-[10px] text-red-400 mt-1 max-w-xs">{bk.errorMessage}</div>
+                            )}
+                          </td>
+                          <td className="p-4 text-right space-x-2">
+                            {bk.status === 'COMPLETED' && (
+                              <button
+                                onClick={() => handleDownloadBackup(bk.id, bk.filename)}
+                                className="inline-flex items-center text-xs font-semibold text-blue-400 hover:text-blue-300 hover:underline transition"
+                              >
+                                Download
+                              </button>
+                            )}
+                            {bk.status === 'COMPLETED' && (
+                              <button
+                                onClick={() => handleRestoreBackup(bk.id)}
+                                className="inline-flex items-center text-xs font-semibold text-yellow-400 hover:text-yellow-300 hover:underline transition"
+                              >
+                                Restore
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteBackup(bk.id)}
+                              className="inline-flex items-center text-xs font-semibold text-red-400 hover:text-red-300 hover:underline transition"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
