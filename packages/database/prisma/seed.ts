@@ -21,13 +21,18 @@ function encrypt(text: string, secretKeyHex: string): string {
   return `${iv.toString('hex')}:${encrypted}:${authTag}`;
 }
 
-const encKey = process.env.AGENT_ENCRYPTION_KEY;
-if (!encKey) {
-  throw new Error('AGENT_ENCRYPTION_KEY environment variable is required for seeding encrypted fields');
+function getRequiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} environment variable is required for seeding encrypted fields`);
+  }
+  return value;
 }
 
+const encKey = getRequiredEnv('AGENT_ENCRYPTION_KEY');
+
 function encryptValue(value: string): string {
-  return encrypt(value, encKey!);
+  return encrypt(value, encKey);
 }
 
 function hashPassword(password: string): string {

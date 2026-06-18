@@ -13,3 +13,5 @@ export interface HeartbeatResponse {
   pendingJobsCount: number;
   timestamp: string;
 }
+
+export { decrypt, encrypt } from './crypto';
