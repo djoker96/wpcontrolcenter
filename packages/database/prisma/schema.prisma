@@ -188,6 +188,7 @@ model Site {
   maintenanceSnapshots MaintenanceSnapshot[]
   integrations       SiteIntegration[]
   diagnostics        SiteDiagnostics?
+  performanceAudits  SitePerformanceAudit[]
 
   @@index([status])
   @@index([connectionStatus])
@@ -537,4 +538,24 @@ model SiteDiagnostics {
 
   @@map("site_diagnostics")
 }
+
+model SitePerformanceAudit {
+  id                 String   @id @default(cuid())
+  siteId             String   @map("site_id")
+  performanceScore   Int      @map("performance_score")
+  accessibilityScore Int      @map("accessibility_score")
+  bestPracticesScore Int      @map("best_practices_score")
+  seoScore           Int      @map("seo_score")
+  lcpMs              Float?   @map("lcp_ms")
+  inpMs              Float?   @map("inp_ms")
+  cls                Float?   @map("cls")
+  auditedAt          DateTime @default(now()) @map("audited_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@map("site_performance_audits")
+}
+
 
