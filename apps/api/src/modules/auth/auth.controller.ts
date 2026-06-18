@@ -1,6 +1,8 @@
-import { Body, Controller, Get, Post, UseGuards, NotImplementedException } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -13,19 +15,14 @@ export class AuthController {
     return this.authService.login(payload);
   }
 
-  @Post('logout')
-  logout() {
-    throw new NotImplementedException('Logout feature is not implemented yet. Clean up local token instead.');
-  }
-
   @Post('forgot-password')
-  forgotPassword(@Body() payload: { email: string }) {
-    throw new NotImplementedException('Password recovery is not implemented yet.');
+  async forgotPassword(@Body() payload: ForgotPasswordDto) {
+    return this.authService.forgotPassword(payload);
   }
 
   @Post('reset-password')
-  resetPassword(@Body() payload: { token: string; password: string }) {
-    throw new NotImplementedException('Password reset is not implemented yet.');
+  async resetPassword(@Body() payload: ResetPasswordDto) {
+    return this.authService.resetPassword(payload);
   }
 
   @Get('me')
