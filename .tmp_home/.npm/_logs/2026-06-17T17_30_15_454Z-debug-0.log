@@ -1,0 +1,19 @@
+0 verbose cli /Users/djoker/.nvm/versions/node/v25.9.0/bin/node /Users/djoker/.nvm/versions/node/v25.9.0/lib/node_modules/npm/bin/npm-cli.js
+1 info using npm@11.12.1
+2 info using node@v25.9.0
+3 silly config load:file:/Users/djoker/.nvm/versions/node/v25.9.0/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/djoker/Documents/ANTIGRAVITY/.npmrc
+5 silly config load:file:/Users/djoker/Documents/ANTIGRAVITY/.tmp_home/.npmrc
+6 silly config load:file:/Users/djoker/.nvm/versions/node/v25.9.0/etc/npmrc
+7 verbose title npm exec prisma migrate dev --name add_site_diagnostics --schema packages/database/prisma/schema.prisma
+8 verbose argv "exec" "--" "prisma" "migrate" "dev" "--name" "add_site_diagnostics" "--schema" "packages/database/prisma/schema.prisma"
+9 verbose logfile logs-max:10 dir:/Users/djoker/Documents/ANTIGRAVITY/.tmp_home/.npm/_logs/2026-06-17T17_30_15_454Z-
+10 verbose logfile /Users/djoker/Documents/ANTIGRAVITY/.tmp_home/.npm/_logs/2026-06-17T17_30_15_454Z-debug-0.log
+11 silly logfile done cleaning log files
+12 http fetch GET https://registry.npmjs.org/npm attempt 1 failed with ENOTFOUND
+13 verbose cwd /Users/djoker/Documents/ANTIGRAVITY
+14 verbose os Darwin 25.3.0
+15 verbose node v25.9.0
+16 verbose npm  v11.12.1
+17 verbose exit 1
+18 verbose code 1

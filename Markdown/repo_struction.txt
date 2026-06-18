@@ -1,0 +1,82 @@
+wp-control-center/
+├── apps/
+│   ├── web/                         # Next.js admin dashboard
+│   ├── api/                         # NestJS backend
+│   └── worker/                      # BullMQ workers / cron jobs
+│
+├── packages/
+│   ├── ui/                          # shared UI components
+│   ├── config/                      # eslint, prettier, tsconfig, env
+│   ├── database/                    # prisma schema, migrations, seed
+│   ├── shared/                      # shared types, constants, utils
+│   ├── sdk/                         # internal client sdk
+│   ├── auth/                        # auth helpers
+│   ├── monitoring/                  # uptime, incidents logic
+│   ├── analytics/                   # ga4 + gsc service wrappers
+│   └── notifications/               # email/telegram/slack
+│
+├── wordpress-agent/
+│   └── plugin/
+│       ├── wp-control-center-agent.php
+│       ├── readme.txt
+│       ├── includes/
+│       │   ├── class-loader.php
+│       │   ├── class-api.php
+│       │   ├── class-auth.php
+│       │   ├── class-heartbeat.php
+│       │   ├── class-system-info.php
+│       │   ├── class-plugin-manager.php
+│       │   ├── class-theme-manager.php
+│       │   ├── class-core-manager.php
+│       │   ├── class-maintenance-manager.php
+│       │   ├── class-cache-manager.php
+│       │   ├── class-db-manager.php
+│       │   ├── class-file-editor.php
+│       │   ├── class-logger.php
+│       │   └── helpers.php
+│       ├── admin/
+│       │   ├── class-admin-page.php
+│       │   └── views/
+│       └── assets/
+│
+├── docs/
+│   ├── product/
+│   │   ├── PRD.md
+│   │   ├── ROADMAP.md
+│   │   ├── USER_STORIES.md
+│   │   ├── ACCEPTANCE_CRITERIA.md
+│   │   └── RELEASE_SCOPE.md
+│   ├── architecture/
+│   │   ├── SYSTEM_ARCHITECTURE.md
+│   │   ├── WORDPRESS_AGENT_SPEC.md
+│   │   ├── SECURITY_MODEL.md
+│   │   ├── JOB_SYSTEM.md
+│   │   └── SEQUENCE_FLOWS.md
+│   ├── api/
+│   │   └── openapi.yaml
+│   ├── db/
+│   │   ├── ERD.md
+│   │   └── DATA_DICTIONARY.md
+│   ├── runbooks/
+│   │   ├── RELEASE_PROCESS.md
+│   │   ├── INCIDENT_RESPONSE.md
+│   │   └── ROLLBACK_GUIDE.md
+│   └── qa/
+│       ├── TEST_PLAN.md
+│       └── UAT_CHECKLIST.md
+│
+├── infrastructure/
+│   ├── docker/
+│   ├── nginx/
+│   ├── compose/
+│   └── scripts/
+│
+├── .github/
+│   └── workflows/
+│
+├── .env.example
+├── package.json
+├── pnpm-workspace.yaml
+├── turbo.json
+├── README.md
+└── CONTRIBUTING.md

@@ -1,0 +1,2387 @@
+openapi: 3.1.0
+info:
+  title: WP Control Center API
+  version: 1.0.0
+  description: >-
+    REST API specification for the WP Control Center admin dashboard, worker
+    orchestration layer, and WordPress agent integration.
+servers:
+  - url: https://api.example.com
+    description: Production
+  - url: http://localhost:3001
+    description: Local
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Users
+  - name: Sites
+  - name: Site Inventory
+  - name: Site Actions
+  - name: Jobs
+  - name: Monitoring
+  - name: Analytics
+  - name: Integrations
+  - name: Notifications
+  - name: Agent
+paths:
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out current user
+      responses:
+        '204':
+          description: Logged out
+  /api/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Send password reset email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '202':
+          description: Accepted
+  /api/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password with token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token:
+                  type: string
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          description: Password reset complete
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user profile
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List users
+      responses:
+        '200':
+          description: Users list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+    post:
+      tags: [Users]
+      summary: Create user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /api/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    patch:
+      tags: [Users]
+      summary: Update user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    delete:
+      tags: [Users]
+      summary: Deactivate user
+      responses:
+        '204':
+          description: User deactivated
+
+  /api/sites:
+    get:
+      tags: [Sites]
+      summary: List sites
+      parameters:
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/SiteStatus'
+        - in: query
+          name: connectionStatus
+          schema:
+            $ref: '#/components/schemas/ConnectionStatus'
+        - in: query
+          name: hasUpdates
+          schema:
+            type: boolean
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sites list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Site'
+    post:
+      tags: [Sites]
+      summary: Create site
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSiteRequest'
+      responses:
+        '201':
+          description: Site created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+
+  /api/sites/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SiteId'
+    get:
+      tags: [Sites]
+      summary: Get site detail
+      responses:
+        '200':
+          description: Site detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+    patch:
+      tags: [Sites]
+      summary: Update site
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSiteRequest'
+      responses:
+        '200':
+          description: Site updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+    delete:
+      tags: [Sites]
+      summary: Archive site
+      responses:
+        '204':
+          description: Site archived
+
+  /api/sites/{id}/generate-connection-token:
+    post:
+      tags: [Sites]
+      summary: Generate one-time connection token for WordPress agent
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Connection token generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+
+  /api/sites/{id}/rotate-secret:
+    post:
+      tags: [Sites]
+      summary: Rotate site secret keys
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Secret rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  publicKey:
+                    type: string
+                  rotatedAt:
+                    type: string
+                    format: date-time
+
+  /api/sites/{id}/resync:
+    post:
+      tags: [Sites]
+      summary: Queue full site resynchronization job
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '202':
+          description: Resync job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/overview:
+    get:
+      tags: [Site Inventory]
+      summary: Get overview panel data for a site
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Site overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteOverviewResponse'
+
+  /api/sites/{id}/plugins:
+    get:
+      tags: [Site Inventory]
+      summary: List plugins for a site
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Plugin list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Plugin'
+
+  /api/sites/{id}/themes:
+    get:
+      tags: [Site Inventory]
+      summary: List themes for a site
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Theme list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Theme'
+
+  /api/sites/{id}/core:
+    get:
+      tags: [Site Inventory]
+      summary: Get WordPress core version status for a site
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Core version info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoreVersion'
+
+  /api/sites/{id}/uptime:
+    get:
+      tags: [Monitoring]
+      summary: Get recent uptime checks for a site
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+      responses:
+        '200':
+          description: Uptime checks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UptimeCheck'
+
+  /api/sites/{id}/incidents:
+    get:
+      tags: [Monitoring]
+      summary: Get incidents for a site
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Incident list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Incident'
+
+  /api/sites/{id}/analytics:
+    get:
+      tags: [Analytics]
+      summary: Get combined analytics overview for a site
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - in: query
+          name: startDate
+          required: true
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Analytics overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteAnalyticsResponse'
+
+  /api/sites/{id}/audit-logs:
+    get:
+      tags: [Sites]
+      summary: Get audit logs for a site
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Audit log list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+
+  /api/sites/{id}/actions/update-core:
+    post:
+      tags: [Site Actions]
+      summary: Queue WordPress core update
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/update-plugin:
+    post:
+      tags: [Site Actions]
+      summary: Queue plugin update
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug]
+              properties:
+                slug:
+                  type: string
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/update-theme:
+    post:
+      tags: [Site Actions]
+      summary: Queue theme update
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug]
+              properties:
+                slug:
+                  type: string
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/activate-plugin:
+    post:
+      tags: [Site Actions]
+      summary: Activate plugin
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug]
+              properties:
+                slug:
+                  type: string
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/deactivate-plugin:
+    post:
+      tags: [Site Actions]
+      summary: Deactivate plugin
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug]
+              properties:
+                slug:
+                  type: string
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/install-plugin:
+    post:
+      tags: [Site Actions]
+      summary: Install plugin from wordpress.org slug
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug]
+              properties:
+                slug:
+                  type: string
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/delete-plugin:
+    post:
+      tags: [Site Actions]
+      summary: Delete plugin
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug]
+              properties:
+                slug:
+                  type: string
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/delete-theme:
+    post:
+      tags: [Site Actions]
+      summary: Delete theme
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug]
+              properties:
+                slug:
+                  type: string
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/toggle-maintenance:
+    post:
+      tags: [Site Actions]
+      summary: Enable or disable maintenance mode
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/clear-cache:
+    post:
+      tags: [Site Actions]
+      summary: Clear site cache through supported integrations
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/optimize-database:
+    post:
+      tags: [Site Actions]
+      summary: Optimize WordPress database
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/update-robots:
+    post:
+      tags: [Site Actions]
+      summary: Replace robots.txt content
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/update-htaccess:
+    post:
+      tags: [Site Actions]
+      summary: Replace .htaccess content after snapshot
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/sites/{id}/actions/update-php-config:
+    post:
+      tags: [Site Actions]
+      summary: Update supported PHP-related site config keys
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePhpConfigRequest'
+      responses:
+        '202':
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/jobs:
+    get:
+      tags: [Jobs]
+      summary: List jobs
+      parameters:
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/JobStatus'
+        - in: query
+          name: siteId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Job'
+
+  /api/jobs/{id}:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    get:
+      tags: [Jobs]
+      summary: Get job detail
+      responses:
+        '200':
+          description: Job detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Job'
+                  - type: object
+                    properties:
+                      logs:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/JobLog'
+
+  /api/jobs/{id}/retry:
+    post:
+      tags: [Jobs]
+      summary: Retry failed job
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '202':
+          description: Retry queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobQueueResponse'
+
+  /api/jobs/{id}/cancel:
+    post:
+      tags: [Jobs]
+      summary: Cancel queued or running job if supported
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '202':
+          description: Cancel requested
+
+  /api/monitoring/overview:
+    get:
+      tags: [Monitoring]
+      summary: Monitoring summary across all sites
+      responses:
+        '200':
+          description: Monitoring overview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalSites:
+                    type: integer
+                  onlineSites:
+                    type: integer
+                  downSites:
+                    type: integer
+                  openIncidents:
+                    type: integer
+                  averageResponseTimeMs:
+                    type: integer
+
+  /api/monitoring/incidents:
+    get:
+      tags: [Monitoring]
+      summary: List incidents
+      parameters:
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/IncidentStatus'
+      responses:
+        '200':
+          description: Incidents list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Incident'
+
+  /api/monitoring/uptime-checks:
+    get:
+      tags: [Monitoring]
+      summary: List recent uptime checks across sites
+      responses:
+        '200':
+          description: Uptime checks list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UptimeCheck'
+
+  /api/analytics/overview:
+    get:
+      tags: [Analytics]
+      summary: Analytics summary across all sites
+      parameters:
+        - in: query
+          name: startDate
+          required: true
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Analytics overview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totals:
+                    type: object
+                    properties:
+                      sessions:
+                        type: integer
+                      users:
+                        type: integer
+                      pageviews:
+                        type: integer
+                      clicks:
+                        type: integer
+                      impressions:
+                        type: integer
+
+  /api/analytics/sites/{id}/ga4:
+    get:
+      tags: [Analytics]
+      summary: Get GA4 analytics data for site
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - in: query
+          name: startDate
+          required: true
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: GA4 data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsSeriesResponse'
+
+  /api/analytics/sites/{id}/gsc:
+    get:
+      tags: [Analytics]
+      summary: Get Search Console analytics data for site
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - in: query
+          name: startDate
+          required: true
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: GSC data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsSeriesResponse'
+
+  /api/integrations/google/connect:
+    post:
+      tags: [Integrations]
+      summary: Start Google OAuth flow
+      responses:
+        '200':
+          description: OAuth URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authorizationUrl:
+                    type: string
+                    format: uri
+
+  /api/integrations/google/callback:
+    post:
+      tags: [Integrations]
+      summary: Complete Google OAuth callback and save tokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                state:
+                  type: string
+      responses:
+        '200':
+          description: Integration connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationAccount'
+
+  /api/integrations:
+    get:
+      tags: [Integrations]
+      summary: List integration accounts
+      responses:
+        '200':
+          description: Integration accounts list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IntegrationAccount'
+
+  /api/sites/{id}/integrations/ga4:
+    post:
+      tags: [Integrations]
+      summary: Attach GA4 property to site
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [integrationAccountId, externalPropertyId]
+              properties:
+                integrationAccountId:
+                  type: string
+                externalPropertyId:
+                  type: string
+      responses:
+        '200':
+          description: Site integration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteIntegration'
+
+  /api/sites/{id}/integrations/gsc:
+    post:
+      tags: [Integrations]
+      summary: Attach Search Console property to site
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [integrationAccountId, externalSiteIdentifier]
+              properties:
+                integrationAccountId:
+                  type: string
+                externalSiteIdentifier:
+                  type: string
+      responses:
+        '200':
+          description: Site integration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteIntegration'
+
+  /api/notifications/channels:
+    get:
+      tags: [Notifications]
+      summary: List notification channels
+      responses:
+        '200':
+          description: Notification channels
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationChannel'
+    post:
+      tags: [Notifications]
+      summary: Create notification channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNotificationChannelRequest'
+      responses:
+        '201':
+          description: Channel created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationChannel'
+
+  /api/notifications/channels/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Notifications]
+      summary: Update notification channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNotificationChannelRequest'
+      responses:
+        '200':
+          description: Channel updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationChannel'
+    delete:
+      tags: [Notifications]
+      summary: Delete notification channel
+      responses:
+        '204':
+          description: Channel deleted
+
+  /api/notifications/history:
+    get:
+      tags: [Notifications]
+      summary: Get notification delivery history
+      responses:
+        '200':
+          description: Notification history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationEvent'
+
+  /wp-json/wpcc/v1/register:
+    post:
+      tags: [Agent]
+      summary: Register WordPress agent with central server
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRegisterRequest'
+      responses:
+        '200':
+          description: Agent registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRegisterResponse'
+
+  /wp-json/wpcc/v1/heartbeat:
+    post:
+      tags: [Agent]
+      summary: Agent heartbeat and lightweight status sync
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentHeartbeatRequest'
+      responses:
+        '200':
+          description: Heartbeat accepted
+
+  /wp-json/wpcc/v1/system-info:
+    post:
+      tags: [Agent]
+      summary: Sync system information from agent
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentSystemInfoRequest'
+      responses:
+        '200':
+          description: System info accepted
+
+  /wp-json/wpcc/v1/sync/plugins:
+    post:
+      tags: [Agent]
+      summary: Sync plugin inventory
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [siteId, plugins]
+              properties:
+                siteId:
+                  type: string
+                plugins:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Plugin'
+      responses:
+        '200':
+          description: Plugins synced
+
+  /wp-json/wpcc/v1/sync/themes:
+    post:
+      tags: [Agent]
+      summary: Sync theme inventory
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [siteId, themes]
+              properties:
+                siteId:
+                  type: string
+                themes:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Theme'
+      responses:
+        '200':
+          description: Themes synced
+
+  /wp-json/wpcc/v1/sync/core:
+    post:
+      tags: [Agent]
+      summary: Sync WordPress core version information
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [siteId, core]
+              properties:
+                siteId:
+                  type: string
+                core:
+                  $ref: '#/components/schemas/CoreVersion'
+      responses:
+        '200':
+          description: Core info synced
+
+  /wp-json/wpcc/v1/execute/update-core:
+    post:
+      tags: [Agent]
+      summary: Agent execution endpoint for core update
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/update-plugin:
+    post:
+      tags: [Agent]
+      summary: Agent execution endpoint for plugin update
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/update-theme:
+    post:
+      tags: [Agent]
+      summary: Agent execution endpoint for theme update
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/activate-plugin:
+    post:
+      tags: [Agent]
+      summary: Activate plugin at agent level
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/deactivate-plugin:
+    post:
+      tags: [Agent]
+      summary: Deactivate plugin at agent level
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/install-plugin:
+    post:
+      tags: [Agent]
+      summary: Install plugin at agent level
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/delete-plugin:
+    post:
+      tags: [Agent]
+      summary: Delete plugin at agent level
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/delete-theme:
+    post:
+      tags: [Agent]
+      summary: Delete theme at agent level
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/maintenance:
+    post:
+      tags: [Agent]
+      summary: Toggle maintenance mode at agent level
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/clear-cache:
+    post:
+      tags: [Agent]
+      summary: Clear supported cache layers at agent level
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/optimize-db:
+    post:
+      tags: [Agent]
+      summary: Optimize database at agent level
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/update-robots:
+    post:
+      tags: [Agent]
+      summary: Update robots.txt at agent level
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/update-htaccess:
+    post:
+      tags: [Agent]
+      summary: Update .htaccess at agent level
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+
+  /wp-json/wpcc/v1/execute/update-php-config:
+    post:
+      tags: [Agent]
+      summary: Update supported PHP config keys at agent level
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentExecuteRequest'
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentExecutionResult'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    SiteId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    JobId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: Unauthorized
+  schemas:
+    UserRole:
+      type: string
+      enum: [SUPER_ADMIN, ADMIN, OPERATOR, VIEWER]
+    EnvironmentType:
+      type: string
+      enum: [PRODUCTION, STAGING, DEVELOPMENT]
+    SiteStatus:
+      type: string
+      enum: [ACTIVE, DISABLED, ARCHIVED]
+    ConnectionStatus:
+      type: string
+      enum: [PENDING, CONNECTED, DISCONNECTED, ERROR]
+    JobStatus:
+      type: string
+      enum: [QUEUED, RUNNING, SUCCESS, FAILED, CANCELED, TIMED_OUT]
+    JobType:
+      type: string
+      enum:
+        - REGISTER_SITE
+        - RESYNC_SITE
+        - SYNC_SYSTEM_INFO
+        - SYNC_PLUGINS
+        - SYNC_THEMES
+        - SYNC_CORE
+        - UPDATE_CORE
+        - UPDATE_PLUGIN
+        - UPDATE_THEME
+        - ACTIVATE_PLUGIN
+        - DEACTIVATE_PLUGIN
+        - INSTALL_PLUGIN
+        - DELETE_PLUGIN
+        - DELETE_THEME
+        - TOGGLE_MAINTENANCE
+        - CLEAR_CACHE
+        - OPTIMIZE_DATABASE
+        - UPDATE_ROBOTS_TXT
+        - UPDATE_HTACCESS
+        - UPDATE_PHP_CONFIG
+    IncidentStatus:
+      type: string
+      enum: [OPEN, RESOLVED, MUTED]
+    NotificationChannelType:
+      type: string
+      enum: [EMAIL, TELEGRAM, SLACK, DISCORD, WEBHOOK]
+    IntegrationProvider:
+      type: string
+      enum: [GOOGLE]
+    IntegrationStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE, EXPIRED, ERROR]
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+          nullable: true
+        role:
+          $ref: '#/components/schemas/UserRole'
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateUserRequest:
+      type: object
+      required: [email, password, role]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        fullName:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+    UpdateUserRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        isActive:
+          type: boolean
+    Site:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        domain:
+          type: string
+        siteUrl:
+          type: string
+          format: uri
+        environment:
+          $ref: '#/components/schemas/EnvironmentType'
+        wpVersion:
+          type: string
+          nullable: true
+        phpVersion:
+          type: string
+          nullable: true
+        wpAgentVersion:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/SiteStatus'
+        connectionStatus:
+          $ref: '#/components/schemas/ConnectionStatus'
+        maintenanceMode:
+          type: boolean
+        ga4PropertyId:
+          type: string
+          nullable: true
+        gscSiteUrl:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        lastSeenAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateSiteRequest:
+      type: object
+      required: [name, domain, siteUrl]
+      properties:
+        name:
+          type: string
+        domain:
+          type: string
+        siteUrl:
+          type: string
+          format: uri
+        environment:
+          $ref: '#/components/schemas/EnvironmentType'
+        timezone:
+          type: string
+        notes:
+          type: string
+    UpdateSiteRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        siteUrl:
+          type: string
+          format: uri
+        environment:
+          $ref: '#/components/schemas/EnvironmentType'
+        status:
+          $ref: '#/components/schemas/SiteStatus'
+        timezone:
+          type: string
+        notes:
+          type: string
+    Plugin:
+      type: object
+      properties:
+        id:
+          type: string
+        siteId:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        versionInstalled:
+          type: string
+        versionLatest:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        isPremium:
+          type: boolean
+        autoUpdateEnabled:
+          type: boolean
+        updateAvailable:
+          type: boolean
+        sourceType:
+          type: string
+          nullable: true
+        installedAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+    Theme:
+      type: object
+      properties:
+        id:
+          type: string
+        siteId:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        versionInstalled:
+          type: string
+        versionLatest:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        updateAvailable:
+          type: boolean
+        lastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+    CoreVersion:
+      type: object
+      properties:
+        id:
+          type: string
+        siteId:
+          type: string
+        versionInstalled:
+          type: string
+        versionLatest:
+          type: string
+          nullable: true
+        updateAvailable:
+          type: boolean
+        lastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+        siteId:
+          type: string
+        jobType:
+          $ref: '#/components/schemas/JobType'
+        targetType:
+          type: string
+          enum: [SITE, CORE, PLUGIN, THEME, CONFIG, CACHE, DATABASE]
+        targetSlug:
+          type: string
+          nullable: true
+        payloadJson:
+          type: object
+          additionalProperties: true
+          nullable: true
+        status:
+          $ref: '#/components/schemas/JobStatus'
+        initiatedByUserId:
+          type: string
+          nullable: true
+        queuedAt:
+          type: string
+          format: date-time
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        retryCount:
+          type: integer
+        errorMessage:
+          type: string
+          nullable: true
+        resultJson:
+          type: object
+          additionalProperties: true
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    JobLog:
+      type: object
+      properties:
+        id:
+          type: string
+        jobId:
+          type: string
+        level:
+          type: string
+          enum: [INFO, WARN, ERROR, DEBUG]
+        message:
+          type: string
+        contextJson:
+          type: object
+          additionalProperties: true
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    JobQueueResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          example: queued
+    UptimeCheck:
+      type: object
+      properties:
+        id:
+          type: string
+        siteId:
+          type: string
+        checkedAt:
+          type: string
+          format: date-time
+        statusCode:
+          type: integer
+          nullable: true
+        responseTimeMs:
+          type: integer
+          nullable: true
+        isUp:
+          type: boolean
+        errorMessage:
+          type: string
+          nullable: true
+    Incident:
+      type: object
+      properties:
+        id:
+          type: string
+        siteId:
+          type: string
+        incidentType:
+          type: string
+          enum: [UPTIME, RESPONSE_TIME, CONNECTION]
+        severity:
+          type: string
+          enum: [INFO, WARNING, CRITICAL]
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          $ref: '#/components/schemas/IncidentStatus'
+        summary:
+          type: string
+          nullable: true
+        metadataJson:
+          type: object
+          additionalProperties: true
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AnalyticsPoint:
+      type: object
+      properties:
+        metricDate:
+          type: string
+          format: date
+        sessions:
+          type: integer
+          nullable: true
+        users:
+          type: integer
+          nullable: true
+        pageviews:
+          type: integer
+          nullable: true
+        impressions:
+          type: integer
+          nullable: true
+        clicks:
+          type: integer
+          nullable: true
+        ctr:
+          type: number
+          format: float
+          nullable: true
+        avgPosition:
+          type: number
+          format: float
+          nullable: true
+    TopPage:
+      type: object
+      properties:
+        pagePath:
+          type: string
+        pageTitle:
+          type: string
+          nullable: true
+        sessions:
+          type: integer
+          nullable: true
+        pageviews:
+          type: integer
+          nullable: true
+        impressions:
+          type: integer
+          nullable: true
+        clicks:
+          type: integer
+          nullable: true
+        ctr:
+          type: number
+          format: float
+          nullable: true
+        avgPosition:
+          type: number
+          format: float
+          nullable: true
+    AnalyticsSeriesResponse:
+      type: object
+      properties:
+        source:
+          type: string
+          enum: [GA4, GSC]
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsPoint'
+        topPages:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopPage'
+    SiteAnalyticsResponse:
+      type: object
+      properties:
+        ga4:
+          $ref: '#/components/schemas/AnalyticsSeriesResponse'
+        gsc:
+          $ref: '#/components/schemas/AnalyticsSeriesResponse'
+    SiteOverviewResponse:
+      type: object
+      properties:
+        site:
+          $ref: '#/components/schemas/Site'
+        core:
+          $ref: '#/components/schemas/CoreVersion'
+        pluginSummary:
+          type: object
+          properties:
+            total:
+              type: integer
+            active:
+              type: integer
+            updatesAvailable:
+              type: integer
+        themeSummary:
+          type: object
+          properties:
+            total:
+              type: integer
+            updatesAvailable:
+              type: integer
+        monitoring:
+          type: object
+          properties:
+            isUp:
+              type: boolean
+            averageResponseTimeMs:
+              type: integer
+            openIncidents:
+              type: integer
+        recentJobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Job'
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+          nullable: true
+        siteId:
+          type: string
+          nullable: true
+        action:
+          type: string
+        entityType:
+          type: string
+          nullable: true
+        entityId:
+          type: string
+          nullable: true
+        payloadJson:
+          type: object
+          additionalProperties: true
+          nullable: true
+        result:
+          type: string
+          enum: [SUCCESS, FAILURE, PARTIAL]
+        ipAddress:
+          type: string
+          nullable: true
+        userAgent:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    NotificationChannel:
+      type: object
+      properties:
+        id:
+          type: string
+        channelType:
+          $ref: '#/components/schemas/NotificationChannelType'
+        destination:
+          type: string
+        isEnabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateNotificationChannelRequest:
+      type: object
+      required: [channelType, destination]
+      properties:
+        channelType:
+          $ref: '#/components/schemas/NotificationChannelType'
+        destination:
+          type: string
+    UpdateNotificationChannelRequest:
+      type: object
+      properties:
+        destination:
+          type: string
+        isEnabled:
+          type: boolean
+    NotificationEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        siteId:
+          type: string
+          nullable: true
+        incidentId:
+          type: string
+          nullable: true
+        notificationId:
+          type: string
+          nullable: true
+        eventType:
+          type: string
+        channelType:
+          $ref: '#/components/schemas/NotificationChannelType'
+        destination:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, SENT, FAILED]
+        payloadJson:
+          type: object
+          additionalProperties: true
+          nullable: true
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    IntegrationAccount:
+      type: object
+      properties:
+        id:
+          type: string
+        provider:
+          $ref: '#/components/schemas/IntegrationProvider'
+        accountEmail:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          $ref: '#/components/schemas/IntegrationStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SiteIntegration:
+      type: object
+      properties:
+        id:
+          type: string
+        siteId:
+          type: string
+        integrationAccountId:
+          type: string
+        provider:
+          $ref: '#/components/schemas/IntegrationProvider'
+        externalPropertyId:
+          type: string
+          nullable: true
+        externalSiteIdentifier:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/IntegrationStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    UpdatePhpConfigRequest:
+      type: object
+      properties:
+        memoryLimit:
+          type: string
+          example: 256M
+        maxExecutionTime:
+          type: integer
+          example: 120
+        uploadMaxFilesize:
+          type: string
+          example: 64M
+        postMaxSize:
+          type: string
+          example: 64M
+      additionalProperties: false
+    AgentRegisterRequest:
+      type: object
+      required: [connectionToken, siteUrl, domain, wpVersion, phpVersion, agentVersion]
+      properties:
+        connectionToken:
+          type: string
+        siteUrl:
+          type: string
+          format: uri
+        domain:
+          type: string
+        wpVersion:
+          type: string
+        phpVersion:
+          type: string
+        agentVersion:
+          type: string
+        timezone:
+          type: string
+    AgentRegisterResponse:
+      type: object
+      properties:
+        siteId:
+          type: string
+        publicKey:
+          type: string
+        heartbeatIntervalMinutes:
+          type: integer
+    AgentHeartbeatRequest:
+      type: object
+      required: [siteId, timestamp]
+      properties:
+        siteId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        maintenanceMode:
+          type: boolean
+        wpVersion:
+          type: string
+        phpVersion:
+          type: string
+        agentVersion:
+          type: string
+    AgentSystemInfoRequest:
+      type: object
+      required: [siteId]
+      properties:
+        siteId:
+          type: string
+        wpVersion:
+          type: string
+        phpVersion:
+          type: string
+        activeTheme:
+          type: string
+        timezone:
+          type: string
+        locale:
+          type: string
+        siteHealth:
+          type: object
+          additionalProperties: true
+    AgentExecuteRequest:
+      type: object
+      required: [jobId, siteId, timestamp, nonce, signature]
+      properties:
+        jobId:
+          type: string
+        siteId:
+          type: string
+        targetSlug:
+          type: string
+          nullable: true
+        payload:
+          type: object
+          additionalProperties: true
+          nullable: true
+        timestamp:
+          type: integer
+        nonce:
+          type: string
+        signature:
+          type: string
+    AgentExecutionResult:
+      type: object
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          enum: [success, failed]
+        previousVersion:
+          type: string
+          nullable: true
+        newVersion:
+          type: string
+          nullable: true
+        logs:
+          type: array
+          items:
+            type: string
+        errorMessage:
+          type: string
+          nullable: true

@@ -113,6 +113,89 @@ class WPCC_Agent_API {
                 $success = (new WPCC_Agent_Maintenance_Manager())->toggle($enabled);
                 $res = ['success' => $success, 'message' => $success ? 'Maintenance toggled successfully.' : 'Failed to toggle maintenance mode.'];
                 break;
+            case 'diagnostics':
+                $disk_total = @disk_total_space(ABSPATH) ?: 0;
+                $disk_free = @disk_free_space(ABSPATH) ?: 0;
+                $disk_used = max(0, $disk_total - $disk_free);
+
+                // WP Cron check
+                $crons = _get_cron_array();
+                $late_jobs = [];
+                $now = time();
+                if (is_array($crons)) {
+                    foreach ($crons as $timestamp => $cronhooks) {
+                        if ($timestamp < $now - 300) { // late by 5+ mins
+                            foreach ($cronhooks as $hook => $keys) {
+                                foreach ($keys as $key => $data) {
+                                    $late_jobs[] = [
+                                        'hook' => $hook,
+                                        'schedule' => $timestamp,
+                                        'delay_seconds' => $now - $timestamp,
+                                        'schedule_name' => $data['schedule'] ?? 'one-off'
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                $cron_health = count($late_jobs) > 0 ? 'LATE_JOBS' : 'OK';
+
+                $res = [
+                    'success' => true,
+                    'data' => [
+                        'disk' => [
+                            'total' => $disk_total,
+                            'free' => $disk_free,
+                            'used' => $disk_used,
+                        ],
+                        'cron' => [
+                            'health' => $cron_health,
+                            'late_jobs' => array_slice($late_jobs, 0, 50),
+                        ],
+                    ],
+                ];
+                break;
+            case 'php-logs':
+                $log_file = '';
+                if (defined('WP_DEBUG_LOG') && is_string(WP_DEBUG_LOG)) {
+                    $log_file = WP_DEBUG_LOG;
+                } elseif (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG === true) {
+                    $log_file = WP_CONTENT_DIR . '/debug.log';
+                } else {
+                    $log_file = ini_get('error_log');
+                }
+
+                if (empty($log_file) || !file_exists($log_file)) {
+                    $log_file = WP_CONTENT_DIR . '/debug.log';
+                }
+
+                if (file_exists($log_file) && is_readable($log_file)) {
+                    $lines = intval($body['lines'] ?? 100);
+                    $file = new SplFileObject($log_file, 'r');
+                    $file->seek(PHP_INT_MAX);
+                    $total_lines = $file->key();
+                    $start_line = max(0, $total_lines - $lines);
+                    $file->seek($start_line);
+                    
+                    $log_content = '';
+                    while (!$file->eof()) {
+                        $log_content .= $file->current();
+                        $file->next();
+                    }
+                    $res = [
+                        'success' => true,
+                        'log_file' => basename($log_file),
+                        'content' => $log_content,
+                    ];
+                } else {
+                    $res = [
+                        'success' => false,
+                        'message' => 'PHP error log file not found or not readable. Path: ' . basename($log_file),
+                        'content' => '',
+                    ];
+                }
+                break;
             default:
                 return new WP_REST_Response(['success' => false, 'error' => 'Unknown action: ' . $action], 400);
         }

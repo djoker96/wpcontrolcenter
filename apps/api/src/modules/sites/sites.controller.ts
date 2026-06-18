@@ -99,6 +99,8 @@ export class SitesController {
         themeUpdatesAvailable,
         coreUpdateAvailable: site.coreVersion?.updateAvailable || false,
         coreVersionLatest: site.coreVersion?.versionLatest || null,
+        ga4PropertyId: site.ga4PropertyId,
+        gscSiteUrl: site.gscSiteUrl,
       },
     };
   }

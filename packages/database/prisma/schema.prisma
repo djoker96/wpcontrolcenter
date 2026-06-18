@@ -187,6 +187,7 @@ model Site {
   notificationEvents NotificationEvent[]
   maintenanceSnapshots MaintenanceSnapshot[]
   integrations       SiteIntegration[]
+  diagnostics        SiteDiagnostics?
 
   @@index([status])
   @@index([connectionStatus])
@@ -517,3 +518,23 @@ model SiteIntegration {
   @@index([integrationAccountId])
   @@map("site_integrations")
 }
+
+model SiteDiagnostics {
+  id                String    @id @default(cuid())
+  siteId            String    @unique @map("site_id")
+  sslExpiresAt      DateTime? @map("ssl_expires_at")
+  sslIssuer         String?   @map("ssl_issuer")
+  sslStatus         String?   @map("ssl_status")
+  diskTotalBytes    Float?    @map("disk_total_bytes")
+  diskUsedBytes     Float?    @map("disk_used_bytes")
+  cronHealthStatus  String    @default("OK") @map("cron_health_status")
+  cronDetailsJson   Json?     @map("cron_details_json")
+  lastDiagnosticsAt DateTime  @default(now()) @map("last_diagnostics_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("site_diagnostics")
+}
+

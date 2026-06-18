@@ -163,6 +163,27 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   const [analyticsRange, setAnalyticsRange] = useState(30);
   const [isEditingConnection, setIsEditingConnection] = useState(false);
 
+  // Server Diagnostics State
+  interface DiagnosticsData {
+    sslExpiresAt: string | null;
+    sslIssuer: string | null;
+    sslStatus: string | null;
+    diskTotalBytes: number | null;
+    diskUsedBytes: number | null;
+    cronHealthStatus: string;
+    cronDetailsJson: Array<{ hook: string; schedule: number; delay_seconds: number; schedule_name: string }> | null;
+    lastDiagnosticsAt: string;
+  }
+
+  const [diagnosticsData, setDiagnosticsData] = useState<DiagnosticsData | null>(null);
+  const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
+  const [refreshingDiagnostics, setRefreshingDiagnostics] = useState(false);
+
+  // PHP Error Logs State
+  const [phpLogs, setPhpLogs] = useState("");
+  const [phpLogsLines, setPhpLogsLines] = useState(100);
+  const [loadingPhpLogs, setLoadingPhpLogs] = useState(false);
+
   const handleMapSite = async () => {
     const token = localStorage.getItem("wpcc_token");
     if (!token || !selectedAccountId) return;
@@ -262,6 +283,85 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, analyticsRange, overviewData?.ga4PropertyId, overviewData?.gscSiteUrl]);
+
+  const fetchDiagnostics = async () => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+
+    setLoadingDiagnostics(true);
+    setError("");
+    try {
+      const res = await fetch(`http://localhost:3003/api/sites/${id}/diagnostics`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load site diagnostics");
+      const json = await res.json();
+      setDiagnosticsData(json.diagnostics);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to load diagnostics";
+      setError(errorMsg);
+    } finally {
+      setLoadingDiagnostics(false);
+    }
+  };
+
+  const refreshDiagnosticsData = async () => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+
+    setRefreshingDiagnostics(true);
+    setError("");
+    try {
+      const res = await fetch(`http://localhost:3003/api/sites/${id}/diagnostics/refresh`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.message || "Failed to refresh diagnostics");
+      }
+      const json = await res.json();
+      setDiagnosticsData(json.data);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to refresh diagnostics";
+      setError(errorMsg);
+    } finally {
+      setRefreshingDiagnostics(false);
+    }
+  };
+
+  const fetchPhpLogsData = async (linesNum = phpLogsLines) => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+
+    setLoadingPhpLogs(true);
+    try {
+      const res = await fetch(`http://localhost:3003/api/sites/${id}/diagnostics/php-logs?lines=${linesNum}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.message || "Failed to fetch PHP error logs");
+      }
+      const json = await res.json();
+      setPhpLogs(json.content || "No PHP error logs found.");
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to fetch logs";
+      setPhpLogs(`Error: ${errorMsg}`);
+    } finally {
+      setLoadingPhpLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "diagnostics") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchDiagnostics();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchPhpLogsData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const triggerMaintenanceAction = async (action: string, payload: Record<string, unknown> = {}) => {
     const token = localStorage.getItem("wpcc_token");
@@ -502,6 +602,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
             { id: "uptime", label: `Uptime & Incidents (${incidentsList.filter(i => i.status === "OPEN").length})` },
             { id: "maintenance", label: "Maintenance & Tools" },
             { id: "analytics", label: "Analytics & SEO" },
+            { id: "diagnostics", label: "Server Diagnostics" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -1199,6 +1300,172 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                         </table>
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "diagnostics" && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="flex justify-between items-center border-b border-zinc-900 pb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white font-heading">Server Diagnostics & Resources</h3>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Monitor server disk usage, SSL health, WordPress Crons, and view PHP logs.
+                  </p>
+                </div>
+                <Button
+                  onClick={refreshDiagnosticsData}
+                  disabled={refreshingDiagnostics}
+                  className="bg-violet-600 hover:bg-violet-500 text-white font-semibold py-2"
+                >
+                  {refreshingDiagnostics ? "Refreshing..." : "Refresh Diagnostics"}
+                </Button>
+              </div>
+
+              {loadingDiagnostics && !diagnosticsData ? (
+                <div className="text-zinc-500 text-sm py-4">Loading diagnostics data...</div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="rounded-xl border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                      <h4 className="text-sm font-semibold text-white">Disk Space Usage</h4>
+                      {diagnosticsData?.diskTotalBytes ? (
+                        <div className="space-y-4">
+                          <div className="flex justify-between text-xs font-mono">
+                            <span className="text-zinc-400">Used: {(diagnosticsData.diskUsedBytes! / 1024 / 1024 / 1024).toFixed(2)} GB</span>
+                            <span className="text-zinc-400">Total: {(diagnosticsData.diskTotalBytes! / 1024 / 1024 / 1024).toFixed(2)} GB</span>
+                          </div>
+                          <div className="w-full bg-zinc-900 rounded-full h-3.5 overflow-hidden border border-zinc-850">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                (diagnosticsData.diskUsedBytes! / diagnosticsData.diskTotalBytes!) >= 0.9 
+                                  ? 'bg-red-500' 
+                                  : (diagnosticsData.diskUsedBytes! / diagnosticsData.diskTotalBytes!) >= 0.75 
+                                  ? 'bg-yellow-500' 
+                                  : 'bg-emerald-500'
+                              }`}
+                              style={{ width: `${(diagnosticsData.diskUsedBytes! / diagnosticsData.diskTotalBytes!) * 100}%` }}
+                            />
+                          </div>
+                          <div className="text-right text-xs font-mono text-zinc-500">
+                            {((diagnosticsData.diskUsedBytes! / diagnosticsData.diskTotalBytes!) * 100).toFixed(1)}% Capacity Used
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-zinc-600 text-xs italic">No disk space data synced. Connect agent first.</div>
+                      )}
+                    </div>
+
+                    <div className="rounded-xl border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                      <h4 className="text-sm font-semibold text-white">SSL Certificate Status</h4>
+                      {diagnosticsData?.sslStatus ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                              diagnosticsData.sslStatus === 'VALID' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30' :
+                              diagnosticsData.sslStatus === 'EXPIRING_SOON' ? 'bg-yellow-950/40 text-yellow-500 border border-yellow-900/30' :
+                              'bg-red-950/40 text-red-400 border border-red-900/30'
+                            }`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${
+                                diagnosticsData.sslStatus === 'VALID' ? 'bg-emerald-500' :
+                                diagnosticsData.sslStatus === 'EXPIRING_SOON' ? 'bg-yellow-500' :
+                                'bg-red-500'
+                              }`} />
+                              {diagnosticsData.sslStatus}
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                            <div className="text-zinc-500">Issuer:</div>
+                            <div className="text-zinc-300 truncate" title={diagnosticsData.sslIssuer || ''}>{diagnosticsData.sslIssuer || 'Unknown'}</div>
+                            <div className="text-zinc-500">Expires At:</div>
+                            <div className="text-zinc-300">
+                              {diagnosticsData.sslExpiresAt ? new Date(diagnosticsData.sslExpiresAt).toLocaleDateString() : '—'}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-zinc-650 text-xs italic">No SSL data available. Domain checker starting soon.</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-sm font-semibold text-white">WordPress Cron Health</h4>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        diagnosticsData?.cronHealthStatus === 'OK' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30' :
+                        'bg-yellow-950/40 text-yellow-500 border border-yellow-900/30'
+                      }`}>
+                        {diagnosticsData?.cronHealthStatus === 'OK' ? 'Healthy (No Late Crons)' : 'Late Jobs Detected'}
+                      </span>
+                    </div>
+
+                    {diagnosticsData?.cronDetailsJson && diagnosticsData.cronDetailsJson.length > 0 ? (
+                      <div className="overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900/10">
+                        <table className="w-full border-collapse text-left text-xs">
+                          <thead>
+                            <tr className="border-b border-zinc-900 bg-zinc-900/40 text-zinc-400 font-semibold uppercase">
+                              <th className="p-3">Hook Name</th>
+                              <th className="p-3">Schedule Name</th>
+                              <th className="p-3 text-right">Delay (Seconds)</th>
+                              <th className="p-3 text-right">Scheduled Time</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-900 font-mono text-zinc-300">
+                            {diagnosticsData.cronDetailsJson.map((job, idx) => (
+                              <tr key={idx} className="hover:bg-zinc-900/20">
+                                <td className="p-3 font-semibold text-white">{job.hook}</td>
+                                <td className="p-3">{job.schedule_name}</td>
+                                <td className="p-3 text-right text-yellow-500">{job.delay_seconds.toLocaleString()}s</td>
+                                <td className="p-3 text-right text-zinc-500">{new Date(job.schedule * 1000).toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-zinc-600 text-xs italic text-center py-2">No late cron jobs. All scheduled tasks running normally.</div>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-zinc-900 bg-zinc-950 p-6 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-sm font-semibold text-white">PHP Error Log Viewer</h4>
+                      <div className="flex items-center gap-3">
+                        <select 
+                          value={phpLogsLines}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setPhpLogsLines(val);
+                            fetchPhpLogsData(val);
+                          }}
+                          className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-1.5 text-xs text-white outline-none focus:border-violet-500 transition"
+                        >
+                          <option value="50">Last 50 lines</option>
+                          <option value="100">Last 100 lines</option>
+                          <option value="200">Last 200 lines</option>
+                          <option value="500">Last 500 lines</option>
+                        </select>
+                        <Button
+                          onClick={() => fetchPhpLogsData(phpLogsLines)}
+                          disabled={loadingPhpLogs}
+                          className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs py-1.5"
+                        >
+                          {loadingPhpLogs ? "Loading..." : "Refresh Logs"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="relative font-mono text-xs rounded-xl border border-zinc-900 bg-zinc-900/50 p-4 h-80 overflow-y-auto select-all text-zinc-300 whitespace-pre-wrap">
+                      {loadingPhpLogs && !phpLogs ? (
+                        <div className="text-zinc-600 text-center py-20 italic">Streaming PHP error logs...</div>
+                      ) : (
+                        phpLogs || "PHP error logs empty or logging not configured."
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

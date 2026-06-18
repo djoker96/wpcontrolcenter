@@ -4,6 +4,7 @@ import { createDecipheriv, createHmac, createCipheriv, randomBytes } from 'node:
 import * as dotenv from 'dotenv';
 import { setInterval } from 'node:timers';
 import * as path from 'node:path';
+import * as tls from 'node:tls';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -967,6 +968,271 @@ async function syncAnalyticsData() {
   }
 }
 
+// SSL Certificate & Domain Expiry Checker
+async function checkSslAndDomainExpiry() {
+  console.log('[worker] Starting SSL and Domain Expiry checks...');
+  try {
+    const sites = await prisma.site.findMany({
+      where: { status: 'ACTIVE' },
+    });
+
+    for (const site of sites) {
+      try {
+        console.log(`[worker] [SSL] Checking SSL expiry for domain: ${site.domain}`);
+        const sslInfo = await getSslDetails(site.domain);
+        const expiresAt = sslInfo.expiresAt;
+        const issuer = sslInfo.issuer;
+        const now = new Date();
+        const diffDays = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        
+        let sslStatus = 'VALID';
+        if (diffDays <= 0) {
+          sslStatus = 'EXPIRED';
+        } else if (diffDays <= 7) {
+          sslStatus = 'CRITICAL';
+        } else if (diffDays <= 30) {
+          sslStatus = 'EXPIRING_SOON';
+        }
+
+        await prisma.siteDiagnostics.upsert({
+          where: { siteId: site.id },
+          update: {
+            sslExpiresAt: expiresAt,
+            sslIssuer: issuer,
+            sslStatus,
+            lastDiagnosticsAt: new Date(),
+          },
+          create: {
+            siteId: site.id,
+            sslExpiresAt: expiresAt,
+            sslIssuer: issuer,
+            sslStatus,
+            lastDiagnosticsAt: new Date(),
+          },
+        });
+
+        if (sslStatus === 'EXPIRED' || sslStatus === 'CRITICAL' || sslStatus === 'EXPIRING_SOON') {
+          const severity = sslStatus === 'EXPIRING_SOON' ? 'WARNING' : 'CRITICAL';
+          
+          const existingIncident = await prisma.incident.findFirst({
+            where: { siteId: site.id, status: 'OPEN', incidentType: 'CONNECTION', summary: { startsWith: 'SSL' } },
+          });
+
+          if (!existingIncident) {
+            const newIncident = await prisma.incident.create({
+              data: {
+                siteId: site.id,
+                incidentType: 'CONNECTION',
+                severity,
+                startedAt: new Date(),
+                status: 'OPEN',
+                summary: `SSL Certificate for ${site.domain} is ${sslStatus === 'EXPIRED' ? 'EXPIRED' : 'EXPIRING SOON'} (Days left: ${diffDays})`,
+                metadataJson: { expiresAt: expiresAt.toISOString(), diffDays, issuer },
+              },
+            });
+            await dispatchNotifications(newIncident.id, 'INCIDENT_OPENED');
+          }
+        } else {
+          const openSslIncidents = await prisma.incident.findMany({
+            where: { siteId: site.id, status: 'OPEN', incidentType: 'CONNECTION', summary: { startsWith: 'SSL' } },
+          });
+
+          for (const incident of openSslIncidents) {
+            await prisma.incident.update({
+              where: { id: incident.id },
+              data: {
+                status: 'RESOLVED',
+                endedAt: new Date(),
+                summary: 'SSL Certificate is now valid and healthy.',
+              },
+            });
+            await dispatchNotifications(incident.id, 'INCIDENT_RESOLVED');
+          }
+        }
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : 'Unknown SSL error';
+        console.error(`[worker] [SSL] Failed to check SSL for ${site.domain}:`, errMsg);
+        
+        await prisma.siteDiagnostics.upsert({
+          where: { siteId: site.id },
+          update: {
+            sslStatus: 'ERROR',
+            lastDiagnosticsAt: new Date(),
+          },
+          create: {
+            siteId: site.id,
+            sslStatus: 'ERROR',
+            lastDiagnosticsAt: new Date(),
+          },
+        });
+      }
+    }
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : 'Unknown SSL loop error';
+    console.error('[worker] [SSL] Error in SSL check worker loop:', errMsg);
+  }
+}
+
+function getSslDetails(domain: string): Promise<{ expiresAt: Date, issuer: string }> {
+  return new Promise((resolve, reject) => {
+    const socket = tls.connect({
+      host: domain,
+      port: 443,
+      servername: domain,
+      rejectUnauthorized: false,
+    }, () => {
+      const cert = socket.getPeerCertificate();
+      socket.end();
+      if (cert && cert.valid_to) {
+        const cn = cert.issuer.CN;
+        const o = cert.issuer.O;
+        const cnStr = Array.isArray(cn) ? cn[0] : cn;
+        const oStr = Array.isArray(o) ? o[0] : o;
+        resolve({
+          expiresAt: new Date(cert.valid_to),
+          issuer: cnStr || oStr || 'Unknown',
+        });
+      } else {
+        reject(new Error('Failed to retrieve peer certificate'));
+      }
+    });
+
+    socket.setTimeout(8000);
+    socket.on('timeout', () => {
+      socket.destroy();
+      reject(new Error('SSL connection timeout'));
+    });
+
+    socket.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
+// Diagnostics & Server resources sync from Agent
+async function syncDiagnosticsData() {
+  console.log('[worker] Starting Server Diagnostics sync from Agents...');
+  try {
+    const sites = await prisma.site.findMany({
+      where: { status: 'ACTIVE', connectionStatus: 'CONNECTED' },
+      include: { credential: true },
+    });
+
+    for (const site of sites) {
+      if (!site.credential) continue;
+
+      try {
+        const secretKey = decrypt(site.credential.secretKeyEncrypted, getEncryptionKey());
+        const method = 'POST';
+        const path = '/wpcc/v1/execute/diagnostics';
+        const timestamp = Math.floor(Date.now() / 1000).toString();
+        const bodyObj = {};
+        const bodyStr = JSON.stringify(bodyObj);
+
+        const message = `${method}|${path}|${timestamp}|${bodyStr}`;
+        const signature = createHmac('sha256', secretKey).update(message).digest('hex');
+
+        const targetUrl = `${site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/diagnostics`;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(targetUrl, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-wpcc-signature': signature,
+            'x-wpcc-timestamp': timestamp,
+          },
+          body: bodyStr,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}`);
+        }
+
+        const json = await response.json() as Record<string, unknown>;
+        if (!json.success || !json.data) {
+          throw new Error((json.message as string) || 'Agent returned success=false');
+        }
+
+        const dataObj = json.data as Record<string, unknown>;
+        const disk = dataObj.disk as Record<string, number>;
+        const cron = dataObj.cron as Record<string, unknown>;
+
+        const total = disk.total;
+        const used = disk.used;
+        const percentUsed = total > 0 ? (used / total) * 100 : 0;
+
+        await prisma.siteDiagnostics.upsert({
+          where: { siteId: site.id },
+          update: {
+            diskTotalBytes: total,
+            diskUsedBytes: used,
+            cronHealthStatus: (cron.health as string) || 'OK',
+            cronDetailsJson: (cron.late_jobs as any) || [],
+            lastDiagnosticsAt: new Date(),
+          },
+          create: {
+            siteId: site.id,
+            diskTotalBytes: total,
+            diskUsedBytes: used,
+            cronHealthStatus: (cron.health as string) || 'OK',
+            cronDetailsJson: (cron.late_jobs as any) || [],
+            lastDiagnosticsAt: new Date(),
+          },
+        });
+
+        if (percentUsed >= 90) {
+          const existingIncident = await prisma.incident.findFirst({
+            where: { siteId: site.id, status: 'OPEN', incidentType: 'RESPONSE_TIME', summary: { startsWith: 'DISK' } },
+          });
+
+          if (!existingIncident) {
+            const newIncident = await prisma.incident.create({
+              data: {
+                siteId: site.id,
+                incidentType: 'RESPONSE_TIME',
+                severity: 'CRITICAL',
+                startedAt: new Date(),
+                status: 'OPEN',
+                summary: `DISK space critical on ${site.domain}: ${percentUsed.toFixed(1)}% used.`,
+                metadataJson: { total, used, percentUsed },
+              },
+            });
+            await dispatchNotifications(newIncident.id, 'INCIDENT_OPENED');
+          }
+        } else {
+          const openDiskIncidents = await prisma.incident.findMany({
+            where: { siteId: site.id, status: 'OPEN', incidentType: 'RESPONSE_TIME', summary: { startsWith: 'DISK' } },
+          });
+
+          for (const incident of openDiskIncidents) {
+            await prisma.incident.update({
+              where: { id: incident.id },
+              data: {
+                status: 'RESOLVED',
+                endedAt: new Date(),
+                summary: `Disk space usage recovered to safe levels: ${percentUsed.toFixed(1)}%.`,
+              },
+            });
+            await dispatchNotifications(incident.id, 'INCIDENT_RESOLVED');
+          }
+        }
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : 'Unknown diagnostics sync error';
+        console.error(`[worker] Failed to sync diagnostics for ${site.domain}:`, errMsg);
+      }
+    }
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : 'Unknown diagnostics loop error';
+    console.error('[worker] Error in syncDiagnosticsData loop:', errMsg);
+  }
+}
+
 const intervalSeconds = process.env.UPTIME_CHECK_INTERVAL_SECONDS ? Number(process.env.UPTIME_CHECK_INTERVAL_SECONDS) : 300;
 console.log(`[worker] Uptime check interval configured to ${intervalSeconds}s`);
 
@@ -985,6 +1251,14 @@ function tick(name: string): void {
 
 setInterval(() => Promise.resolve().then(() => syncAnalyticsData()), 60 * 60 * 1000); // Sync actual analytics hourly
 Promise.resolve().then(() => syncAnalyticsData()); // Run once on startup
+
+// Server Diagnostics sync scheduler (Hourly)
+setInterval(() => Promise.resolve().then(() => syncDiagnosticsData()), 60 * 60 * 1000);
+Promise.resolve().then(() => syncDiagnosticsData()); // Run once on startup
+
+// SSL Cert expiry scheduler (12 Hours)
+setInterval(() => Promise.resolve().then(() => checkSslAndDomainExpiry()), 12 * 60 * 60 * 1000);
+Promise.resolve().then(() => checkSslAndDomainExpiry()); // Run once on startup
 
 setInterval(() => tick('dispatch-jobs'), 15 * 1000);
 
