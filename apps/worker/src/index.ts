@@ -1,46 +1,16 @@
 import { Worker, Job as BullJob } from 'bullmq';
 import { PrismaClient, JobStatus, LogLevel, AuditResult, AnalyticsSource, NotificationChannelType, NotificationDeliveryStatus } from '@wpcc/database';
-import { createDecipheriv, createHmac, createCipheriv, randomBytes } from 'node:crypto';
+import { decrypt, encrypt } from '@wpcc/shared';
+import { createHmac } from 'node:crypto';
 import * as dotenv from 'dotenv';
 import { setInterval } from 'node:timers';
 import * as path from 'node:path';
 import * as tls from 'node:tls';
+import * as fs from 'node:fs';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const prisma = new PrismaClient();
-const ALGORITHM = 'aes-256-gcm';
-
-function decrypt(encryptedText: string, secretKeyHex: string): string {
-  const key = Buffer.from(secretKeyHex, 'hex');
-  const parts = encryptedText.split(':');
-  if (parts.length !== 3) {
-    throw new Error('Invalid encrypted text format');
-  }
-  const iv = Buffer.from(parts[0], 'hex');
-  const encrypted = parts[1];
-  const authTag = Buffer.from(parts[2], 'hex');
-
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(authTag);
-
-  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
-}
-
-function encrypt(text: string, secretKeyHex: string): string {
-  const key = Buffer.from(secretKeyHex, 'hex');
-  const iv = randomBytes(12);
-  const cipher = createCipheriv(ALGORITHM, key, iv);
-  
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  
-  const authTag = cipher.getAuthTag().toString('hex');
-  
-  return `${iv.toString('hex')}:${encrypted}:${authTag}`;
-}
 
 function getEncryptionKey(): string {
   const key = process.env.AGENT_ENCRYPTION_KEY;
@@ -225,6 +195,203 @@ async function resyncSite(siteId: string, secretKey: string, siteUrl: string) {
   });
 }
 
+async function handleCreateBackupJob(jobId: string) {
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: { site: { include: { credential: true } } },
+  });
+
+  if (!job || !job.site || !job.site.credential) {
+    throw new Error(`Job or credentials not found for ID ${jobId}`);
+  }
+
+  const { backupId, backupType } = job.payloadJson as { backupId: string, backupType: string };
+
+  await prisma.job.update({ where: { id: jobId }, data: { status: 'RUNNING', startedAt: new Date() } });
+  await prisma.siteBackup.update({ where: { id: backupId }, data: { status: 'RUNNING' } });
+
+  const secretKey = decrypt(job.site.credential.secretKeyEncrypted, getEncryptionKey());
+  const method = 'POST';
+  const pathUrl = '/wpcc/v1/execute/create-backup';
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const bodyObj = { type: backupType };
+  const bodyStr = JSON.stringify(bodyObj);
+
+  const message = `${method}|${pathUrl}|${timestamp}|${bodyStr}`;
+  const signature = createHmac('sha256', secretKey).update(message).digest('hex');
+  const targetUrl = `${job.site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/create-backup`;
+
+  try {
+    const response = await fetch(targetUrl, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-wpcc-signature': signature,
+        'x-wpcc-timestamp': timestamp,
+      },
+      body: bodyStr,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Agent backup create returned status ${response.status}`);
+    }
+
+    const json = await response.json() as any;
+    if (!json.success || !json.filename) {
+      throw new Error(json.message || 'Backup failed on WordPress Agent');
+    }
+
+    const filename = json.filename;
+
+    // Now download the backup file from Agent
+    const downloadPath = `/wpcc/v1/execute/download-backup`;
+    const downloadQuery = `?filename=${encodeURIComponent(filename)}`;
+    const downloadMsg = `GET|${downloadPath}|${timestamp}|`;
+    const downloadSignature = createHmac('sha256', secretKey).update(downloadMsg).digest('hex');
+    const downloadTarget = `${job.site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/download-backup${downloadQuery}`;
+
+    const fileRes = await fetch(downloadTarget, {
+      method: 'GET',
+      headers: {
+        'x-wpcc-signature': downloadSignature,
+        'x-wpcc-timestamp': timestamp,
+      },
+    });
+
+    if (!fileRes.ok) {
+      throw new Error(`Failed to download backup: HTTP ${fileRes.status}`);
+    }
+
+    const storageDir = path.resolve(__dirname, '../../storage/backups', job.siteId);
+    if (!fs.existsSync(storageDir)) {
+      fs.mkdirSync(storageDir, { recursive: true });
+    }
+    
+    const fileDest = path.join(storageDir, filename);
+    const arrayBuffer = await fileRes.arrayBuffer();
+    fs.writeFileSync(fileDest, Buffer.from(arrayBuffer));
+
+    // Delete the backup on the agent to save space
+    const deleteTarget = `${job.site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/delete-backup`;
+    const deleteBody = JSON.stringify({ filename });
+    const deleteMsg = `POST|/wpcc/v1/execute/delete-backup|${timestamp}|${deleteBody}`;
+    const deleteSignature = createHmac('sha256', secretKey).update(deleteMsg).digest('hex');
+    await fetch(deleteTarget, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-wpcc-signature': deleteSignature,
+        'x-wpcc-timestamp': timestamp,
+      },
+      body: deleteBody,
+    });
+
+    const downloadUrl = `/api/sites/${job.siteId}/backups/${backupId}/download`;
+    await prisma.siteBackup.update({
+      where: { id: backupId },
+      data: {
+        status: 'COMPLETED',
+        filename,
+        sizeBytes: json.size,
+        downloadUrl,
+      },
+    });
+
+    await prisma.job.update({ where: { id: jobId }, data: { status: 'SUCCESS', endedAt: new Date() } });
+  } catch (err: any) {
+    const errMsg = err.message || 'Unknown error';
+    await prisma.siteBackup.update({ where: { id: backupId }, data: { status: 'FAILED', errorMessage: errMsg } });
+    await prisma.job.update({ where: { id: jobId }, data: { status: 'FAILED', endedAt: new Date(), errorMessage: errMsg } });
+  }
+}
+
+async function handleRestoreBackupJob(jobId: string) {
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: { site: { include: { credential: true } } },
+  });
+
+  if (!job || !job.site || !job.site.credential) {
+    throw new Error(`Job or credentials not found for ID ${jobId}`);
+  }
+
+  const { backupId } = job.payloadJson as { backupId: string };
+  const backup = await prisma.siteBackup.findUnique({ where: { id: backupId } });
+  if (!backup) {
+    throw new Error(`Backup file record not found for ID ${backupId}`);
+  }
+
+  await prisma.job.update({ where: { id: jobId }, data: { status: 'RUNNING', startedAt: new Date() } });
+
+  const storageDir = path.resolve(__dirname, '../../storage/backups', job.siteId);
+  const filePath = path.join(storageDir, backup.filename);
+
+  if (!fs.existsSync(filePath)) {
+    throw new Error('Backup file is missing from backend storage');
+  }
+
+  const secretKey = decrypt(job.site.credential.secretKeyEncrypted, getEncryptionKey());
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+
+  try {
+    // 1. Upload file to agent
+    const fileData = fs.readFileSync(filePath);
+    const uploadPath = '/wpcc/v1/execute/upload-backup';
+    const uploadQuery = `?filename=${encodeURIComponent(backup.filename)}`;
+    // For binary body, hash/HMAC is calculated over raw bytes
+    const messageBytes = Buffer.concat([
+      Buffer.from(`POST|${uploadPath}|${timestamp}|`),
+      fileData
+    ]);
+    const uploadSignature = createHmac('sha256', secretKey).update(messageBytes).digest('hex');
+    const uploadTarget = `${job.site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/upload-backup${uploadQuery}`;
+
+    const uploadRes = await fetch(uploadTarget, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'x-wpcc-signature': uploadSignature,
+        'x-wpcc-timestamp': timestamp,
+      },
+      body: fileData,
+    });
+
+    if (!uploadRes.ok) {
+      throw new Error(`Failed to upload backup to Agent: HTTP ${uploadRes.status}`);
+    }
+
+    // 2. Trigger restore on agent
+    const restoreTarget = `${job.site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/restore-backup`;
+    const restoreBody = JSON.stringify({ filename: backup.filename });
+    const restoreMsg = `POST|/wpcc/v1/execute/restore-backup|${timestamp}|${restoreBody}`;
+    const restoreSignature = createHmac('sha256', secretKey).update(restoreMsg).digest('hex');
+
+    const restoreRes = await fetch(restoreTarget, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-wpcc-signature': restoreSignature,
+        'x-wpcc-timestamp': timestamp,
+      },
+      body: restoreBody,
+    });
+
+    if (!restoreRes.ok) {
+      throw new Error(`Failed to restore backup: HTTP ${restoreRes.status}`);
+    }
+
+    const json = await restoreRes.json() as any;
+    if (!json.success) {
+      throw new Error(json.message || 'Agent failed to restore files/database');
+    }
+
+    await prisma.job.update({ where: { id: jobId }, data: { status: 'SUCCESS', endedAt: new Date() } });
+  } catch (err: any) {
+    const errMsg = err.message || 'Unknown error';
+    await prisma.job.update({ where: { id: jobId }, data: { status: 'FAILED', endedAt: new Date(), errorMessage: errMsg } });
+  }
+}
+
 const redisHost = process.env.REDIS_HOST || 'localhost';
 const redisPort = process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6380;
 
@@ -247,6 +414,15 @@ const worker = new Worker(
 
     if (!dbJob) {
       console.error(`[worker] Job ${jobId} not found in database`);
+      return;
+    }
+
+    if (dbJob.jobType === 'CREATE_BACKUP') {
+      await handleCreateBackupJob(jobId);
+      return;
+    }
+    if (dbJob.jobType === 'RESTORE_BACKUP') {
+      await handleRestoreBackupJob(jobId);
       return;
     }
 
