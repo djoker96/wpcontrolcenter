@@ -1260,6 +1260,120 @@ Promise.resolve().then(() => syncDiagnosticsData()); // Run once on startup
 setInterval(() => Promise.resolve().then(() => checkSslAndDomainExpiry()), 12 * 60 * 60 * 1000);
 Promise.resolve().then(() => checkSslAndDomainExpiry()); // Run once on startup
 
+interface PageSpeedResult {
+  performanceScore: number;
+  accessibilityScore: number;
+  bestPracticesScore: number;
+  seoScore: number;
+  lcpMs: number | null;
+  inpMs: number | null;
+  cls: number | null;
+}
+
+interface PageSpeedApiResponse {
+  lighthouseResult?: {
+    categories?: {
+      performance?: { score?: number };
+      accessibility?: { score?: number };
+      'best-practices'?: { score?: number };
+      seo?: { score?: number };
+    };
+    audits?: {
+      'largest-contentful-paint'?: { numericValue?: number };
+      'interactive'?: { numericValue?: number };
+      'cumulative-layout-shift'?: { numericValue?: number };
+    };
+  };
+}
+
+async function fetchPageSpeedMetrics(siteUrl: string): Promise<PageSpeedResult> {
+  const apiKey = process.env.PAGESPEED_API_KEY || '';
+  const keyParam = apiKey ? `&key=${apiKey}` : '';
+  const targetUrl = `https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(siteUrl)}&category=PERFORMANCE&category=ACCESSIBILITY&category=BEST_PRACTICES&category=SEO${keyParam}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 35000); // 35 seconds timeout
+
+  try {
+    const response = await fetch(targetUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`PageSpeed API returned status ${response.status}`);
+    }
+
+    const json = await response.json() as PageSpeedApiResponse;
+    const categories = json.lighthouseResult?.categories;
+    const audits = json.lighthouseResult?.audits;
+
+    const getScore = (val: number | undefined) => val !== undefined ? Math.round(val * 100) : 0;
+
+    const performanceScore = getScore(categories?.performance?.score);
+    const accessibilityScore = getScore(categories?.accessibility?.score);
+    const bestPracticesScore = getScore(categories?.['best-practices']?.score);
+    const seoScore = getScore(categories?.seo?.score);
+
+    const lcp = audits?.['largest-contentful-paint']?.numericValue ?? null;
+    const inp = audits?.['interactive']?.numericValue ?? null;
+    const cls = audits?.['cumulative-layout-shift']?.numericValue ?? null;
+
+    return {
+      performanceScore,
+      accessibilityScore,
+      bestPracticesScore,
+      seoScore,
+      lcpMs: lcp,
+      inpMs: inp,
+      cls: cls,
+    };
+  } catch (err: unknown) {
+    clearTimeout(timeoutId);
+    const msg = err instanceof Error ? err.message : 'Unknown PageSpeed API error';
+    throw new Error(`PageSpeed API fetch failed: ${msg}`);
+  }
+}
+
+async function syncPerformanceData() {
+  console.log('[worker] [PageSpeed] Starting periodic performance audits...');
+  try {
+    const sites = await prisma.site.findMany({
+      where: { status: 'ACTIVE' },
+    });
+
+    for (const site of sites) {
+      console.log(`[worker] [PageSpeed] Auditing performance for ${site.domain}...`);
+      try {
+        const metrics = await fetchPageSpeedMetrics(site.siteUrl);
+        
+        await prisma.sitePerformanceAudit.create({
+          data: {
+            siteId: site.id,
+            performanceScore: metrics.performanceScore,
+            accessibilityScore: metrics.accessibilityScore,
+            bestPracticesScore: metrics.bestPracticesScore,
+            seoScore: metrics.seoScore,
+            lcpMs: metrics.lcpMs,
+            inpMs: metrics.inpMs,
+            cls: metrics.cls,
+          },
+        });
+        console.log(`[worker] [PageSpeed] Successfully saved audit for ${site.domain}`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`[worker] [PageSpeed] Failed to audit ${site.domain}:`, msg);
+      }
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[worker] [PageSpeed] Error in performance sync loop:', msg);
+  }
+}
+
+// Daily Performance Audits (24 Hours)
+setInterval(() => Promise.resolve().then(() => syncPerformanceData()), 24 * 60 * 60 * 1000);
+// Run on startup after 1 minute to avoid overloading startup processes
+setTimeout(() => Promise.resolve().then(() => syncPerformanceData()), 60 * 1000);
+
 setInterval(() => tick('dispatch-jobs'), 15 * 1000);
 
 console.log('Worker bootstrap with BullMQ Worker started successfully');

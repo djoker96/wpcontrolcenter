@@ -10,6 +10,7 @@ import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
+import { PerformanceModule } from './modules/performance/performance.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
     NotificationsModule,
     AgentModule,
     DiagnosticsModule,
+    PerformanceModule,
   ],
 })
 export class AppModule {}
