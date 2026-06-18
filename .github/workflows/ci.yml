@@ -1,0 +1,92 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, master, dev ]
+  pull_request:
+    branches: [ main, master, dev ]
+
+jobs:
+  lint-and-typecheck:
+    name: Code Quality (Lint & Typecheck)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Prisma Client Generation
+        run: npx prisma generate --schema=packages/database/prisma/schema.prisma
+
+      - name: Run Linter
+        run: npm run lint --workspaces --if-present
+
+      - name: Run Type Checking
+        run: npm run typecheck --workspaces --if-present
+
+  build-and-test:
+    name: Build & E2E Testing
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Monorepo Build Verification
+        run: npm run build:all
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Stack
+        run: |
+          docker compose -f docker-compose.prod.yml build
+
+      - name: Start Production Stack
+        run: |
+          docker compose -f docker-compose.prod.yml up -d
+
+      - name: Wait for Nginx Gateway (Port 80)
+        run: |
+          echo "Waiting for Nginx Gateway to be healthy..."
+          timeout 60s sh -c 'until curl -s http://localhost > /dev/null; do echo "Still waiting..."; sleep 2; done'
+          echo "Nginx Gateway is online!"
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium firefox
+        working-directory: apps/web
+
+      - name: Run Playwright E2E Tests
+        run: |
+          BASE_URL=http://localhost npx playwright test
+        working-directory: apps/web
+
+      - name: Stop Production Stack
+        if: always()
+        run: |
+          docker compose -f docker-compose.prod.yml down -v
+
+      - name: Upload Playwright Report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 14
