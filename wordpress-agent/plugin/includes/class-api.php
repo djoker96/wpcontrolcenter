@@ -19,6 +19,18 @@ class WPCC_Agent_API {
             'permission_callback' => [$this, 'verify_request'],
         ]);
 
+        register_rest_route('wpcc/v1', '/execute/download-backup', [
+            'methods' => 'GET',
+            'callback' => [$this, 'download_backup'],
+            'permission_callback' => [$this, 'verify_request'],
+        ]);
+
+        register_rest_route('wpcc/v1', '/execute/upload-backup', [
+            'methods' => 'POST',
+            'callback' => [$this, 'upload_backup'],
+            'permission_callback' => [$this, 'verify_request'],
+        ]);
+
         register_rest_route('wpcc/v1', '/execute/(?P<action>[a-z\-]+)', [
             'methods' => 'POST',
             'callback' => [$this, 'execute_action'],
@@ -107,6 +119,22 @@ class WPCC_Agent_API {
                 break;
             case 'update-core':
                 $res = (new WPCC_Agent_Core_Manager())->update_core();
+                break;
+            case 'create-backup':
+                $res = (new WPCC_Agent_Backup_Manager())->create($body['type'] ?? 'FULL');
+                break;
+            case 'restore-backup':
+                $res = (new WPCC_Agent_Backup_Manager())->restore($body['filename'] ?? '');
+                break;
+            case 'delete-backup':
+                $backup_dir = WP_CONTENT_DIR . '/wpcc-backups';
+                $file = $backup_dir . '/' . basename($body['filename'] ?? '');
+                if (file_exists($file)) {
+                    @unlink($file);
+                    $res = ['success' => true, 'message' => 'Backup deleted from agent.'];
+                } else {
+                    $res = ['success' => false, 'message' => 'Backup file not found on agent.'];
+                }
                 break;
             case 'toggle-maintenance':
                 $enabled = filter_var($body['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
@@ -201,5 +229,40 @@ class WPCC_Agent_API {
         }
 
         return new WP_REST_Response($res, $res['success'] ? 200 : 500);
+    }
+
+    public function download_backup(WP_REST_Request $request) {
+        $filename = basename($request->get_param('filename'));
+        $filepath = WP_CONTENT_DIR . '/wpcc-backups/' . $filename;
+        
+        if (!file_exists($filepath)) {
+            return new WP_Error('not_found', 'Backup file not found', ['status' => 404]);
+        }
+
+        header('Content-Description: File Transfer');
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate');
+        header('Pragma: public');
+        header('Content-Length: ' . filesize($filepath));
+        
+        readfile($filepath);
+        exit;
+    }
+
+    public function upload_backup(WP_REST_Request $request) {
+        $filename = basename($request->get_param('filename'));
+        $backup_dir = WP_CONTENT_DIR . '/wpcc-backups';
+        if (!file_exists($backup_dir)) {
+            wp_mkdir_p($backup_dir);
+        }
+        $filepath = $backup_dir . '/' . $filename;
+        
+        $body = $request->get_body();
+        if (file_put_contents($filepath, $body) !== false) {
+            return new WP_REST_Response(['success' => true, 'filename' => $filename], 200);
+        }
+        return new WP_REST_Response(['success' => false, 'message' => 'Failed to save uploaded backup file.'], 500);
     }
 }

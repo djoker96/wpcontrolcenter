@@ -28,6 +28,7 @@ require_once WPCC_AGENT_PATH . 'includes/class-cache-manager.php';
 require_once WPCC_AGENT_PATH . 'includes/class-db-manager.php';
 require_once WPCC_AGENT_PATH . 'includes/class-file-editor.php';
 require_once WPCC_AGENT_PATH . 'includes/class-logger.php';
+require_once WPCC_AGENT_PATH . 'includes/class-backup-manager.php';
 require_once WPCC_AGENT_PATH . 'admin/class-admin-page.php';
 
 function wpcc_agent_boot() {
