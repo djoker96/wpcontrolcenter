@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, UseGuards, NotImplementedException } from '@nestjs/common';
+import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { JobsService } from './jobs.service';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -12,16 +12,23 @@ export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
   @Get()
-  findAll() { return { data: this.jobsService.findAll() }; }
+  async findAll() {
+    const data = await this.jobsService.findAll();
+    return { data };
+  }
 
   @Get(':id')
-  findOne(@Param('id') id: string) { return this.jobsService.findOne(id); }
+  async findOne(@Param('id') id: string) {
+    return this.jobsService.findOne(id);
+  }
 
   @Post(':id/retry')
-  retry(@Param('id') id: string) {
-    throw new NotImplementedException('Job retry capability is not implemented yet.');
+  async retry(@Param('id') id: string) {
+    return this.jobsService.retry(id);
   }
 
   @Post(':id/cancel')
-  cancel(@Param('id') id: string) { return { id, status: 'CANCELED' }; }
+  async cancel(@Param('id') id: string) {
+    return this.jobsService.cancel(id);
+  }
 }
