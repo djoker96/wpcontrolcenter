@@ -1,0 +1,60 @@
+import { Controller, Get, Post, Delete, Param, Body, UseGuards, Res } from '@nestjs/common';
+import { BackupsService } from './backups.service';
+import { CreateBackupDto } from './dto/create-backup.dto';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UserRole } from '@wpcc/database';
+import { Response } from 'express';
+
+@Controller('sites/:siteId/backups')
+@UseGuards(AuthGuard, RolesGuard)
+export class BackupsController {
+  constructor(private readonly backupsService: BackupsService) {}
+
+  @Get()
+  @Roles(UserRole.ADMIN)
+  async getBackups(@Param('siteId') siteId: string) {
+    return this.backupsService.getBackups(siteId);
+  }
+
+  @Post()
+  @Roles(UserRole.ADMIN)
+  async createBackup(
+    @Param('siteId') siteId: string,
+    @Body() body: CreateBackupDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.backupsService.createBackupJob(siteId, body.backupType, user.id);
+  }
+
+  @Post(':id/restore')
+  @Roles(UserRole.ADMIN)
+  async restoreBackup(
+    @Param('siteId') siteId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.backupsService.restoreBackupJob(siteId, id, user.id);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ADMIN)
+  async deleteBackup(@Param('siteId') siteId: string, @Param('id') id: string) {
+    return this.backupsService.deleteBackup(siteId, id);
+  }
+
+  @Get(':id/download')
+  @Roles(UserRole.ADMIN)
+  async downloadBackup(
+    @Param('siteId') siteId: string,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const { filePath, filename } = await this.backupsService.getBackupFilePath(siteId, id);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.sendFile(filePath);
+  }
+}

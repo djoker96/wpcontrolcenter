@@ -11,6 +11,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AgentModule } from './modules/agent/agent.module';
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { PerformanceModule } from './modules/performance/performance.module';
+import { BackupsModule } from './modules/backups/backups.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { PerformanceModule } from './modules/performance/performance.module';
     AgentModule,
     DiagnosticsModule,
     PerformanceModule,
+    BackupsModule,
   ],
 })
 export class AppModule {}
