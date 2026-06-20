@@ -1,11 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const isCI = !!process.env.CI;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  forbidOnly: isCI,
+  retries: isCI ? 2 : 0,
+  workers: isCI ? 1 : undefined,
   reporter: 'html',
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:5001',
@@ -22,10 +24,16 @@ export default defineConfig({
       use: { ...devices['Desktop Firefox'] },
     },
   ],
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5001',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  // In CI, the Docker stack provides the running server via nginx.
+  // Locally, Playwright manages its own dev server.
+  ...(isCI
+    ? {}
+    : {
+        webServer: {
+          command: 'npm run dev',
+          url: 'http://localhost:5001',
+          reuseExistingServer: true,
+          timeout: 120 * 1000,
+        },
+      }),
 });
