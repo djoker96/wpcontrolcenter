@@ -46,35 +46,34 @@ export class AgentService {
     const siteId = matchedCredential.siteId;
     const secretKey = decrypt(matchedCredential.secretKeyEncrypted, encKey);
 
-    // Update site status
-    await this.prisma.site.update({
-      where: { id: siteId },
-      data: {
-        connectionStatus: ConnectionStatus.CONNECTED,
-        siteUrl,
-        domain,
-        lastSeenAt: new Date(),
-      },
-    });
-
-    // Clear connection token once used
-    await this.prisma.siteCredential.update({
-      where: { siteId },
-      data: {
-        connectionTokenEncrypted: null,
-      },
-    });
-
-    // Log connection audit event
-    await this.prisma.auditLog.create({
-      data: {
-        siteId,
-        action: 'site.connect',
-        entityType: 'site',
-        entityId: siteId,
-        payloadJson: { domain, siteUrl },
-      },
-    });
+    // Perform all state changes atomically within a single transaction
+    // to prevent race conditions (e.g. token cleared but site status not updated)
+    await this.prisma.$transaction([
+      this.prisma.site.update({
+        where: { id: siteId },
+        data: {
+          connectionStatus: ConnectionStatus.CONNECTED,
+          siteUrl,
+          domain,
+          lastSeenAt: new Date(),
+        },
+      }),
+      this.prisma.siteCredential.update({
+        where: { siteId },
+        data: {
+          connectionTokenEncrypted: null,
+        },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          siteId,
+          action: 'site.connect',
+          entityType: 'site',
+          entityId: siteId,
+          payloadJson: { domain, siteUrl },
+        },
+      }),
+    ]);
 
     return {
       success: true,

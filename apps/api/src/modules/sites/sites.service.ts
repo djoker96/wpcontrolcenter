@@ -207,11 +207,46 @@ export class SitesService {
       }
 
       const responseBody = await response.json() as any;
+      if (!responseBody || typeof responseBody !== 'object') {
+        throw new Error('Invalid agent response: not an object');
+      }
       if (!responseBody.success || !responseBody.data) {
         throw new Error(responseBody.message || 'Agent sync failed');
       }
 
       const { systemInfo, plugins, themes, core } = responseBody.data;
+
+      // Validate schema strictly to prevent malformed data from corrupting DB
+      if (!systemInfo || typeof systemInfo !== 'object') {
+        throw new Error('Invalid agent response: systemInfo is missing or not an object');
+      }
+      if (typeof systemInfo.wpVersion !== 'string' ||
+          typeof systemInfo.phpVersion !== 'string' ||
+          typeof systemInfo.wpAgentVersion !== 'string') {
+        throw new Error('Invalid agent response: systemInfo fields must be strings');
+      }
+      if (!Array.isArray(plugins)) {
+        throw new Error('Invalid agent response: plugins must be an array');
+      }
+      if (!Array.isArray(themes)) {
+        throw new Error('Invalid agent response: themes must be an array');
+      }
+      if (!core || typeof core !== 'object') {
+        throw new Error('Invalid agent response: core is missing or not an object');
+      }
+
+      // Validate each plugin entry has required fields
+      for (const p of plugins) {
+        if (!p || typeof p.slug !== 'string' || typeof p.name !== 'string') {
+          throw new Error('Invalid agent response: plugin entry missing slug/name');
+        }
+      }
+      // Validate each theme entry has required fields
+      for (const t of themes) {
+        if (!t || typeof t.slug !== 'string' || typeof t.name !== 'string') {
+          throw new Error('Invalid agent response: theme entry missing slug/name');
+        }
+      }
 
       // Update Site Table
       await this.prisma.site.update({

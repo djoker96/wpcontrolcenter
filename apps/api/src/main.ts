@@ -9,12 +9,21 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { validateEnvironment } from './config/env';
 
 async function bootstrap(): Promise<void> {
+  // Fail fast: validate all required env vars before anything else
+  validateEnvironment();
+
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
   app.enableCors();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  // AllExceptionsFilter catches everything; PrismaExceptionFilter runs first
+  // for Prisma-specific errors, then falls through to AllExceptionsFilter
+  // for all other exceptions.
+  app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalFilters(new PrismaExceptionFilter());
   await app.listen(process.env.PORT ? Number(process.env.PORT) : 3001);
 }

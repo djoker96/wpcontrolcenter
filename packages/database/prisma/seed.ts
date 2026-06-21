@@ -1,5 +1,5 @@
 import { PrismaClient, UserRole, EnvironmentType, ConnectionStatus, SiteStatus, JobStatus, JobType, JobTargetType, IncidentSeverity, IncidentStatus, IncidentType, NotificationChannelType, AnalyticsSource, AuditResult, LogLevel, IntegrationProvider, IntegrationStatus } from '@prisma/client';
-import { createHash, createCipheriv, randomBytes } from 'node:crypto';
+import { scryptSync, createCipheriv, randomBytes } from 'node:crypto';
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
 
@@ -36,7 +36,10 @@ function encryptValue(value: string): string {
 }
 
 function hashPassword(password: string): string {
-  return createHash('sha256').update(password).digest('hex');
+  // Use scrypt (same algorithm as crypto.utils.ts) instead of SHA-256
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
 }
 
 /**

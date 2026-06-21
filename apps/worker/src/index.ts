@@ -393,7 +393,7 @@ async function handleRestoreBackupJob(jobId: string) {
 }
 
 const redisHost = process.env.REDIS_HOST || 'localhost';
-const redisPort = process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6380;
+const redisPort = process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6379;
 
 const worker = new Worker(
   'jobs',
@@ -481,6 +481,9 @@ const worker = new Worker(
 
       await logToJob(jobId, LogLevel.INFO, `Sending request to WordPress Agent: POST ${targetUrl}`);
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30_000); // 30s timeout
+
       const response = await fetch(targetUrl, {
         method,
         headers: {
@@ -489,7 +492,10 @@ const worker = new Worker(
           'x-wpcc-timestamp': timestamp,
         },
         body: bodyStr,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`WordPress Agent responded with HTTP status ${response.status}`);
@@ -585,6 +591,9 @@ const worker = new Worker(
       host: redisHost,
       port: redisPort,
     },
+    // Worker-level options for detecting and retrying hung jobs
+    stalledInterval: 30_000,       // Check every 30s for stalled jobs
+    maxStalledCount: 1,           // Retry once if stalled, then fail
   }
 );
 

@@ -34,6 +34,11 @@ export class AgentGuard implements CanActivate {
       throw new UnauthorizedException('Invalid site credentials');
     }
 
+    // Ensure the credential belongs to the claimed site (prevent cross-site impersonation)
+    if (credentials.siteId !== siteId) {
+      throw new UnauthorizedException('Credential site mismatch');
+    }
+
     const encKey = getAgentEncryptionKey();
     let secretKey = '';
     try {

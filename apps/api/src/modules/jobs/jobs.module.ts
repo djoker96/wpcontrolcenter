@@ -18,6 +18,18 @@ import { JobsService } from './jobs.service';
             host: redisHost,
             port: redisPort,
           },
+          // Default options applied to every job added to this queue.
+          // Retry failed jobs with exponential backoff, and auto-clean old
+          // completed/failed jobs to prevent Redis memory bloat.
+          defaultJobOptions: {
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 5_000,            // 5s, 10s, 20s
+            },
+            removeOnComplete: { count: 100 },  // keep last 100 completed
+            removeOnFail: { count: 200 },      // keep last 200 failed
+          },
         });
       },
     },
