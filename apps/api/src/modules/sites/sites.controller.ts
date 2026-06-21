@@ -173,8 +173,14 @@ export class SitesController {
 
   @Get(':id/audit-logs')
   @Roles(UserRole.ADMIN)
-  auditLogs(@Param('id') id: string) {
-    return { siteId: id, data: [] };
+  async auditLogs(@Param('id') id: string) {
+    const data = await this.sitesService.prisma.auditLog.findMany({
+      where: { siteId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { user: { select: { id: true, email: true, fullName: true } } },
+    });
+    return { siteId: id, data };
   }
 
   @Post(':id/actions/:action')

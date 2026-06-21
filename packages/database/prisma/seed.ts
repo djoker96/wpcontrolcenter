@@ -39,13 +39,31 @@ function hashPassword(password: string): string {
   return createHash('sha256').update(password).digest('hex');
 }
 
+/**
+ * Resolve the seed admin password.
+ * - If SEED_ADMIN_PASSWORD is set, use it (useful for CI / repeatable deploys).
+ * - Otherwise generate a strong random password and print it once so the
+ *   operator can capture it from the deploy logs. This avoids shipping a
+ *   known default credential ("ChangeMe123!") to production.
+ */
+function resolveSeedPassword(): { password: string; generated: boolean } {
+  const fromEnv = process.env.SEED_ADMIN_PASSWORD;
+  if (fromEnv && fromEnv.length >= 12) {
+    return { password: fromEnv, generated: false };
+  }
+  return { password: randomBytes(18).toString('base64url'), generated: true };
+}
+
+let seededAdminPassword: { password: string; generated: boolean } | null = null;
+
 async function main(): Promise<void> {
+  seededAdminPassword = resolveSeedPassword();
   const admin = await prisma.user.upsert({
     where: { email: 'admin@example.com' },
     update: {},
     create: {
       email: 'admin@example.com',
-      passwordHash: hashPassword('ChangeMe123!'),
+      passwordHash: hashPassword(seededAdminPassword.password),
       fullName: 'System Administrator',
       role: UserRole.SUPER_ADMIN,
     },
@@ -285,6 +303,16 @@ async function main(): Promise<void> {
   });
 
   console.log(`Seed completed. Admin: ${admin.email}, Site: ${site.domain}`);
+  if (seededAdminPassword?.generated) {
+    console.log('');
+    console.log('========================================================');
+    console.log('  GENERATED ADMIN PASSWORD (save this now, shown once):');
+    console.log(`  ${seededAdminPassword.password}`);
+    console.log('========================================================');
+    console.log('  Set SEED_ADMIN_PASSWORD in the environment to make this');
+    console.log('  deterministic, or change it immediately after first login.');
+    console.log('========================================================');
+  }
 }
 
 main()

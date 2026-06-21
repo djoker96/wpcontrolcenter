@@ -122,6 +122,31 @@ interface IncidentInfo {
   summary: string | null;
 }
 
+interface JobInfo {
+  id: string;
+  jobType: string;
+  status: string;
+  targetType: string;
+  targetSlug: string | null;
+  errorMessage: string | null;
+  resultJson: unknown;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  logs?: { id: string; level: string; message: string; createdAt: string }[];
+}
+
+interface AuditLogInfo {
+  id: string;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  result: string;
+  ipAddress: string | null;
+  createdAt: string;
+  user: { id: string; email: string; fullName: string | null } | null;
+}
+
 export default function SiteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -137,6 +162,11 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   const [uptimeRatio, setUptimeRatio] = useState<number>(100);
   const [uptimeChecks, setUptimeChecks] = useState<UptimeCheckInfo[]>([]);
   const [incidentsList, setIncidentsList] = useState<IncidentInfo[]>([]);
+
+  // Jobs & Audit State
+  const [jobsList, setJobsList] = useState<JobInfo[]>([]);
+  const [selectedJob, setSelectedJob] = useState<JobInfo | null>(null);
+  const [auditLogs, setAuditLogs] = useState<AuditLogInfo[]>([]);
 
   // Loading States
   const [loading, setLoading] = useState(true);
@@ -569,6 +599,12 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       if (activeTab === "backups") {
         void fetchBackups();
       }
+      if (activeTab === "jobs") {
+        void fetchJobs();
+      }
+      if (activeTab === "audit") {
+        void fetchAuditLogs();
+      }
     });
 
     return () => {
@@ -576,6 +612,79 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  const fetchJobs = async () => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/jobs?siteId=${id}&take=50`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      setJobsList(json.data ?? []);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const viewJobDetail = async (jobId: string) => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/jobs/${jobId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      setSelectedJob(json.data ?? json);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const retryJob = async (jobId: string) => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+    try {
+      await fetch(`${API_URL}/jobs/${jobId}/retry`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      void fetchJobs();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const cancelJob = async (jobId: string) => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+    try {
+      await fetch(`${API_URL}/jobs/${jobId}/cancel`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      void fetchJobs();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const fetchAuditLogs = async () => {
+    const token = localStorage.getItem("wpcc_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/sites/${id}/audit-logs`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      setAuditLogs(json.data ?? []);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const triggerMaintenanceAction = async (action: string, payload: Record<string, unknown> = {}) => {
     const token = localStorage.getItem("wpcc_token");
@@ -599,7 +708,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       const data = await res.json();
-      alert(`Maintenance Job Queued! Job ID: ${data.jobId}. Check Audit Log or reload shortly.`);
+      alert(`Maintenance Job Queued! Job ID: ${data.jobId}. See the Jobs tab for status.`);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Action failed.";
       setError(errorMsg);
@@ -819,6 +928,8 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
             { id: "analytics", label: "Analytics & SEO" },
             { id: "diagnostics", label: "Server Diagnostics" },
             { id: "performance", label: "Performance & Speed" },
+            { id: "jobs", label: `Jobs (${jobsList.filter(j => j.status === "QUEUED" || j.status === "RUNNING").length})` },
+            { id: "audit", label: "Audit Log" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -1906,6 +2017,161 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                               Delete
                             </button>
                           </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "jobs" && (
+            <div className="space-y-4 animate-in fade-in duration-300">
+              <div className="flex items-center justify-between border-b border-zinc-900 pb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white font-heading">Jobs</h3>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Remote actions dispatched to this site. Queued jobs run via the worker.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => void fetchJobs()}
+                  variant="outline"
+                  className="border-zinc-800 text-zinc-300 hover:bg-zinc-900 text-xs px-3 py-1.5"
+                >
+                  Refresh
+                </Button>
+              </div>
+
+              {jobsList.length === 0 ? (
+                <p className="text-sm text-zinc-500 py-8 text-center">No jobs yet for this site.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-zinc-500 border-b border-zinc-900">
+                        <th className="pb-2 pr-4 font-medium">Type</th>
+                        <th className="pb-2 pr-4 font-medium">Target</th>
+                        <th className="pb-2 pr-4 font-medium">Status</th>
+                        <th className="pb-2 pr-4 font-medium">Created</th>
+                        <th className="pb-2 pr-4 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {jobsList.map((job) => (
+                        <tr key={job.id} className="border-b border-zinc-900/50">
+                          <td className="py-2 pr-4 font-mono text-xs text-zinc-300">{job.jobType}</td>
+                          <td className="py-2 pr-4 text-zinc-400">
+                            {job.targetType ? `${job.targetType}${job.targetSlug ? `: ${job.targetSlug}` : ""}` : "—"}
+                          </td>
+                          <td className="py-2 pr-4">
+                            <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
+                              job.status === "SUCCESS" ? "bg-emerald-950 text-emerald-400"
+                              : job.status === "FAILED" ? "bg-red-950 text-red-400"
+                              : job.status === "RUNNING" ? "bg-blue-950 text-blue-400"
+                              : "bg-amber-950 text-amber-400"
+                            }`}>
+                              {job.status}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4 text-xs text-zinc-500">
+                            {new Date(job.createdAt).toLocaleString()}
+                          </td>
+                          <td className="py-2 pr-4 flex gap-2">
+                            <button onClick={() => void viewJobDetail(job.id)} className="text-xs text-violet-400 hover:text-violet-300">View</button>
+                            {(job.status === "FAILED") && (
+                              <button onClick={() => void retryJob(job.id)} className="text-xs text-emerald-400 hover:text-emerald-300">Retry</button>
+                            )}
+                            {(job.status === "QUEUED" || job.status === "RUNNING") && (
+                              <button onClick={() => void cancelJob(job.id)} className="text-xs text-red-400 hover:text-red-300">Cancel</button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {selectedJob && (
+                <div className="mt-6 rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-bold text-white font-heading">Job Detail</h4>
+                    <button onClick={() => setSelectedJob(null)} className="text-xs text-zinc-500 hover:text-zinc-300">Close</button>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-2 text-xs mb-4">
+                    <dt className="text-zinc-500">ID</dt><dd className="text-zinc-300 font-mono">{selectedJob.id}</dd>
+                    <dt className="text-zinc-500">Type</dt><dd className="text-zinc-300">{selectedJob.jobType}</dd>
+                    <dt className="text-zinc-500">Started</dt><dd className="text-zinc-300">{selectedJob.startedAt ? new Date(selectedJob.startedAt).toLocaleString() : "—"}</dd>
+                    <dt className="text-zinc-500">Finished</dt><dd className="text-zinc-300">{selectedJob.finishedAt ? new Date(selectedJob.finishedAt).toLocaleString() : "—"}</dd>
+                  </dl>
+                  {selectedJob.errorMessage && (
+                    <div className="mb-3 rounded border border-red-900/40 bg-red-950/20 p-3 text-xs text-red-400">
+                      {selectedJob.errorMessage}
+                    </div>
+                  )}
+                  {selectedJob.logs && selectedJob.logs.length > 0 && (
+                    <div>
+                      <div className="text-xs text-zinc-500 mb-1">Logs</div>
+                      <pre className="max-h-48 overflow-auto rounded bg-black/40 p-3 text-xs text-zinc-400 font-mono whitespace-pre-wrap">
+                        {selectedJob.logs.map((l) => `[${l.level}] ${new Date(l.createdAt).toLocaleTimeString()} ${l.message}`).join("\n")}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "audit" && (
+            <div className="space-y-4 animate-in fade-in duration-300">
+              <div className="flex items-center justify-between border-b border-zinc-900 pb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white font-heading">Audit Log</h3>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Actions performed on this site (connections, syncs, jobs, maintenance).
+                  </p>
+                </div>
+                <Button
+                  onClick={() => void fetchAuditLogs()}
+                  variant="outline"
+                  className="border-zinc-800 text-zinc-300 hover:bg-zinc-900 text-xs px-3 py-1.5"
+                >
+                  Refresh
+                </Button>
+              </div>
+
+              {auditLogs.length === 0 ? (
+                <p className="text-sm text-zinc-500 py-8 text-center">No audit entries yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-zinc-500 border-b border-zinc-900">
+                        <th className="pb-2 pr-4 font-medium">When</th>
+                        <th className="pb-2 pr-4 font-medium">Action</th>
+                        <th className="pb-2 pr-4 font-medium">Result</th>
+                        <th className="pb-2 pr-4 font-medium">User</th>
+                        <th className="pb-2 pr-4 font-medium">IP</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {auditLogs.map((log) => (
+                        <tr key={log.id} className="border-b border-zinc-900/50">
+                          <td className="py-2 pr-4 text-xs text-zinc-500">{new Date(log.createdAt).toLocaleString()}</td>
+                          <td className="py-2 pr-4 font-mono text-xs text-zinc-300">{log.action}</td>
+                          <td className="py-2 pr-4">
+                            <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
+                              log.result === "SUCCESS" ? "bg-emerald-950 text-emerald-400"
+                              : log.result === "FAILURE" ? "bg-red-950 text-red-400"
+                              : "bg-zinc-900 text-zinc-400"
+                            }`}>
+                              {log.result}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4 text-xs text-zinc-400">{log.user?.email ?? "system"}</td>
+                          <td className="py-2 pr-4 text-xs text-zinc-500 font-mono">{log.ipAddress ?? "—"}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -10,9 +10,15 @@ export class JobsService {
     @Inject('JOBS_QUEUE') private readonly jobsQueue: Queue,
   ) {}
 
-  async findAll() {
+  async findAll(siteId?: string, status?: JobStatus) {
+    const where: { siteId?: string; status?: JobStatus } = {};
+    if (siteId) where.siteId = siteId;
+    if (status) where.status = status;
     return this.prisma.job.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: { site: { select: { id: true, name: true, domain: true } } },
     });
   }
 

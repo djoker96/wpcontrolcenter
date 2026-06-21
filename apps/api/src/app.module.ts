@@ -12,6 +12,7 @@ import { AgentModule } from './modules/agent/agent.module';
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { PerformanceModule } from './modules/performance/performance.module';
 import { BackupsModule } from './modules/backups/backups.module';
+import { AuditModule } from './modules/audit/audit.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { BackupsModule } from './modules/backups/backups.module';
     DiagnosticsModule,
     PerformanceModule,
     BackupsModule,
+    AuditModule,
   ],
 })
 export class AppModule {}

@@ -8,8 +8,8 @@ import { API_URL } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@example.com");
-  const [password, setPassword] = useState("ChangeMe123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -111,10 +111,6 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
-
-          <div className="mt-6 text-center text-xs text-zinc-500">
-            Default user: <code className="text-zinc-400">admin@example.com</code> / <code className="text-zinc-400">ChangeMe123!</code>
-          </div>
         </div>
       </div>
     </div>
