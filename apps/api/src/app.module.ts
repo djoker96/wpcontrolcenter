@@ -15,6 +15,7 @@ import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { PerformanceModule } from './modules/performance/performance.module';
 import { BackupsModule } from './modules/backups/backups.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { UploadModule } from './modules/upload/upload.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { AuditModule } from './modules/audit/audit.module';
     PerformanceModule,
     BackupsModule,
     AuditModule,
+    UploadModule,
   ],
   providers: [
     // Enable ThrottlerGuard globally so every route is rate-limited
