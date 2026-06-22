@@ -518,7 +518,7 @@ model SiteIntegration {
   updatedAt              DateTime          @updatedAt @map("updated_at")
 
   site               Site               @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  integrationAccount IntegrationAccount @relation(fields: [integrationAccountId], references: [id], onDelete: Cascade)
+  integrationAccount IntegrationAccount @relation(fields: [integrationAccountId], references: [id], onDelete: Restrict)
 
   @@unique([siteId, provider])
   @@index([integrationAccountId])

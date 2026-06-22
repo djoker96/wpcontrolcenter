@@ -57,4 +57,35 @@ export function validateEnvironment(): void {
       `Generate one with: openssl rand -hex 32`,
     );
   }
+
+  // Warn (not fail) if production is missing security-sensitive config
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.CORS_ORIGIN) {
+      console.warn(
+        '[security] CORS_ORIGIN is not set in production; cross-origin requests will be rejected.',
+      );
+    }
+    if (process.env.JWT_SECRET && (process.env.JWT_SECRET as string).length < 32) {
+      console.warn(
+        '[security] JWT_SECRET is shorter than 32 characters in production.',
+      );
+    }
+  }
+}
+
+/**
+ * Parse CORS_ALLOWED_ORIGINS into a list. Accepts comma-separated origins
+ * (e.g. "https://app.example.com,https://admin.example.com").
+ * Returns false to disable CORS entirely when not configured.
+ */
+export function getCorsOrigins(): string[] | false {
+  const raw = process.env.CORS_ORIGIN;
+  if (!raw) {
+    // No origins configured: disable CORS so the browser blocks foreign sites.
+    return false;
+  }
+  return raw
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
 }
