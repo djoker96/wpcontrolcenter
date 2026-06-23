@@ -1,0 +1,8 @@
+/* ============================================================
+   Control Center Design System — global CSS entry point
+   Consumers link THIS file only. Keep it as @import lines.
+   ============================================================ */
+@import "tokens/colors.css";
+@import "tokens/typography.css";
+@import "tokens/radius.css";
+@import "tokens/spacing.css";

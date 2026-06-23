@@ -152,6 +152,7 @@ model User {
   fullName     String?    @map("full_name")
   role         UserRole   @default(ADMIN)
   isActive     Boolean    @default(true) @map("is_active")
+  tokenVersion Int        @default(0) @map("token_version")
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
@@ -159,6 +160,7 @@ model User {
   auditLogs              AuditLog[]
   maintenanceSnapshots   MaintenanceSnapshot[]
   passwordResetTokens    PasswordResetToken[]
+  integrationAccounts    IntegrationAccount[]
 
   @@map("users")
 }
@@ -507,6 +509,8 @@ model IntegrationAccount {
   expiresAt             DateTime?          @map("expires_at")
   metadataJson          Json?              @map("metadata_json")
   status                IntegrationStatus  @default(ACTIVE)
+  ownerId               String?            @map("owner_id")
+  owner                 User?              @relation(fields: [ownerId], references: [id])
   createdAt             DateTime           @default(now()) @map("created_at")
   updatedAt             DateTime           @updatedAt @map("updated_at")
 

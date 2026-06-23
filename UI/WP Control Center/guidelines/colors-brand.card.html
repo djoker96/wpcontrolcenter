@@ -1,0 +1,16 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Brand & primary" subtitle="Amber primary + sidebar gold + destructive" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<style>
+  body{margin:0;background:var(--background);font-family:var(--font-sans);padding:20px;display:flex;gap:16px;}
+  .sw{flex:1;}
+  .chip{height:64px;border:1px solid var(--border);border-radius:var(--radius-lg);}
+  .name{font-size:var(--text-sm);font-weight:var(--weight-semibold);color:var(--foreground);margin:9px 0 2px;}
+  .val{font-size:var(--text-xs);color:var(--muted-foreground);font-family:var(--font-mono);}
+</style></head>
+<body>
+  <div class="sw"><div class="chip" style="background:var(--primary)"></div><div class="name">primary</div><div class="val">oklch(.852 .199 92)</div></div>
+  <div class="sw"><div class="chip" style="background:var(--primary-foreground)"></div><div class="name">primary-foreground</div><div class="val">oklch(.421 .095 58)</div></div>
+  <div class="sw"><div class="chip" style="background:var(--sidebar-primary)"></div><div class="name">sidebar-primary</div><div class="val">oklch(.681 .162 76)</div></div>
+  <div class="sw"><div class="chip" style="background:var(--destructive)"></div><div class="name">destructive</div><div class="val">oklch(.577 .245 27)</div></div>
+</body></html>

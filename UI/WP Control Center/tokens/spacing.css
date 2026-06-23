@@ -1,0 +1,30 @@
+/* ============================================================
+   SPACING & ELEVATION
+   4px base spacing scale + a restrained shadow set. With a flat
+   --radius:0 aesthetic, elevation stays subtle — hairline borders
+   do most of the separation; shadows are reserved for overlays
+   (popover / dropdown / dialog).
+   ============================================================ */
+
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Elevation */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 10px 28px rgba(0, 0, 0, 0.16);
+
+  /* Standard control height */
+  --control-h-sm: 30px;
+  --control-h: 34px;
+  --control-h-lg: 40px;
+}
