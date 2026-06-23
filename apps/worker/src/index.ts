@@ -2,11 +2,12 @@ import { Worker, Job as BullJob } from 'bullmq';
 import { PrismaClient, JobStatus, LogLevel, AuditResult, AnalyticsSource, NotificationChannelType, NotificationDeliveryStatus } from '@wpcc/database';
 import { decrypt, encrypt } from '@wpcc/shared';
 import { createHmac } from 'node:crypto';
-import * as dotenv from 'dotenv';
 import { setInterval } from 'node:timers';
 import * as path from 'node:path';
 import * as tls from 'node:tls';
 import * as fs from 'node:fs';
+import * as dotenv from 'dotenv';
+import { handleUploadJob } from './handlers/upload.handler';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -69,6 +70,7 @@ function getActionSlug(jobType: string): string {
     case 'DELETE_THEME': return 'delete-theme';
     case 'UPDATE_CORE': return 'update-core';
     case 'TOGGLE_MAINTENANCE': return 'toggle-maintenance';
+    case 'TOGGLE_OBJECT_CACHE': return 'object-cache-status';
     case 'INSTALL_PLUGIN': return 'install-plugin';
     case 'CLEAR_CACHE': return 'clear-cache';
     case 'OPTIMIZE_DATABASE': return 'optimize-database';
@@ -464,8 +466,24 @@ const worker = new Worker(
       await handleRestoreBackupJob(jobId);
       return;
     }
+    if (dbJob.jobType === 'UPLOAD_PLUGIN' || dbJob.jobType === 'UPLOAD_THEME') {
+      await handleUploadJob(prisma, jobId);
+      return;
+    }
 
-    const actionSlug = getActionSlug(dbJob.jobType);
+    // Resolve action slug, with special handling for object cache
+    let actionSlug = getActionSlug(dbJob.jobType);
+
+    if (dbJob.jobType === 'TOGGLE_OBJECT_CACHE') {
+      const payload = (dbJob.payloadJson as Record<string, any>) || {};
+      if (payload.enabled === true) {
+        actionSlug = 'object-cache-enable';
+      } else if (payload.enabled === false) {
+        actionSlug = 'object-cache-disable';
+      } else {
+        actionSlug = 'object-cache-status';
+      }
+    }
 
     // Move job to RUNNING state
     await prisma.job.update({
@@ -597,6 +615,39 @@ const worker = new Worker(
       await logToJob(jobId, LogLevel.INFO, 'Triggering site inventory resync in background...');
       await resyncSite(site.id, secretKey, site.siteUrl);
       await logToJob(jobId, LogLevel.INFO, 'Site inventory resync completed.');
+
+      // After-action: sync maintenance mode field
+      if (dbJob.jobType === 'TOGGLE_MAINTENANCE') {
+        const enabled = bodyObj.enabled === true;
+        await prisma.site.update({
+          where: { id: site.id },
+          data: { maintenanceMode: enabled },
+        });
+        await logToJob(jobId, LogLevel.INFO, `Site maintenance mode set to ${enabled}`);
+      }
+
+      // After-action: sync object cache fields
+      if (dbJob.jobType === 'TOGGLE_OBJECT_CACHE') {
+        const payload = (dbJob.payloadJson as Record<string, any>) || {};
+        if (payload.enabled !== undefined) {
+          await prisma.site.update({
+            where: { id: site.id },
+            data: { objectCacheEnabled: payload.enabled === true },
+          });
+        } else {
+          // Status check: update from agent response
+          const result = resBody as any;
+          if (result && typeof result.enabled === 'boolean') {
+            await prisma.site.update({
+              where: { id: site.id },
+              data: {
+                objectCacheEnabled: result.enabled,
+                objectCacheType: result.backend || 'Unknown',
+              },
+            });
+          }
+        }
+      }
 
     } catch (err: any) {
       console.error(`[worker] Job ${jobId} failed:`, err);

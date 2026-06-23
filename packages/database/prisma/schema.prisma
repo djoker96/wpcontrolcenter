@@ -52,6 +52,7 @@ enum JobType {
   DELETE_PLUGIN
   DELETE_THEME
   TOGGLE_MAINTENANCE
+  TOGGLE_OBJECT_CACHE
   CLEAR_CACHE
   OPTIMIZE_DATABASE
   UPDATE_ROBOTS_TXT
@@ -79,6 +80,7 @@ enum JobTargetType {
   UPLOAD_THEME
   CONFIG
   CACHE
+  OBJECT_CACHE
   DATABASE
 }
 
@@ -174,6 +176,8 @@ model Site {
   status             SiteStatus        @default(ACTIVE)
   connectionStatus   ConnectionStatus  @default(PENDING) @map("connection_status")
   maintenanceMode    Boolean           @default(false) @map("maintenance_mode")
+  objectCacheEnabled Boolean           @default(false) @map("object_cache_enabled")
+  objectCacheType    String?           @default("Redis") @map("object_cache_type")
   ga4PropertyId      String?           @map("ga4_property_id")
   gscSiteUrl         String?           @map("gsc_site_url")
   notes              String?

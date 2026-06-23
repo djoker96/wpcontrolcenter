@@ -137,6 +137,56 @@ class WPCC_Agent_Plugin_Manager {
         ];
     }
 
+    /**
+     * Install a plugin from a local .zip file (upload-based update).
+     *
+     * @param string $filepath Absolute path to the .zip file.
+     * @return array Result with success flag and message.
+     */
+    public function install_plugin_from_upload(string $filepath): array {
+        if (!file_exists($filepath)) {
+            return ['success' => false, 'error' => 'Uploaded file not found.'];
+        }
+
+        if (!class_exists('Plugin_Upgrader')) {
+            require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        }
+        if (!function_exists('get_plugins')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $upgrader = new Plugin_Upgrader(new Automatic_Upgrader_Skin());
+        $result = $upgrader->install($filepath);
+
+        if (is_wp_error($result)) {
+            return ['success' => false, 'error' => $result->get_error_message()];
+        }
+        if ($result === false) {
+            return ['success' => false, 'error' => 'Plugin installation from upload failed.'];
+        }
+
+        // Reload plugin list and find the newly installed plugin file
+        wp_clean_plugins_cache();
+        $plugins = get_plugins();
+        $plugin_file = '';
+        // The upgrader stores the installed slug in $upgrader->result['destination_name']
+        $installed_slug = $upgrader->result['destination_name'] ?? '';
+        if (!empty($installed_slug)) {
+            foreach (array_keys($plugins) as $file) {
+                if (dirname($file) === $installed_slug) {
+                    $plugin_file = $file;
+                    break;
+                }
+            }
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Plugin installed from upload successfully.',
+            'pluginFile' => $plugin_file ?: $installed_slug . '/' . $installed_slug . '.php',
+        ];
+    }
+
     private function find_plugin_file_by_slug(string $slug): string {
         if (!function_exists('get_plugins')) {
             require_once ABSPATH . 'wp-admin/includes/plugin.php';

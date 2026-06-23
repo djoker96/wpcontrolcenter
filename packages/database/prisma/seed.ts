@@ -63,7 +63,10 @@ async function main(): Promise<void> {
   seededAdminPassword = resolveSeedPassword();
   const admin = await prisma.user.upsert({
     where: { email: 'admin@example.com' },
-    update: {},
+    update: {
+      passwordHash: hashPassword(seededAdminPassword.password),
+      role: UserRole.SUPER_ADMIN,
+    },
     create: {
       email: 'admin@example.com',
       passwordHash: hashPassword(seededAdminPassword.password),

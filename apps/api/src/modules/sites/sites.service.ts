@@ -456,6 +456,20 @@ export class SitesService {
           throw new BadRequestException('Maintenance status (enabled) is required');
         }
         break;
+      case 'object-cache-status':
+        jobType = JobType.TOGGLE_OBJECT_CACHE;
+        targetType = JobTargetType.OBJECT_CACHE;
+        break;
+      case 'object-cache-enable':
+        jobType = JobType.TOGGLE_OBJECT_CACHE;
+        targetType = JobTargetType.OBJECT_CACHE;
+        if (body.enabled === undefined) body.enabled = true;
+        break;
+      case 'object-cache-disable':
+        jobType = JobType.TOGGLE_OBJECT_CACHE;
+        targetType = JobTargetType.OBJECT_CACHE;
+        if (body.enabled === undefined) body.enabled = false;
+        break;
       case 'install-plugin':
         jobType = JobType.INSTALL_PLUGIN;
         targetType = JobTargetType.PLUGIN;

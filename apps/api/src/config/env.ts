@@ -76,13 +76,26 @@ export function validateEnvironment(): void {
 /**
  * Parse CORS_ALLOWED_ORIGINS into a list. Accepts comma-separated origins
  * (e.g. "https://app.example.com,https://admin.example.com").
- * Returns false to disable CORS entirely when not configured.
+ *
+ * Returns false to block cross-origin requests entirely when not configured
+ * in production. In development, defaults to common localhost ports so that
+ * the Next.js dev server (port 5001) and webpack proxy (port 3000) can reach
+ * the API without manual CORS_ORIGIN setup.
  */
 export function getCorsOrigins(): string[] | false {
   const raw = process.env.CORS_ORIGIN;
   if (!raw) {
-    // No origins configured: disable CORS so the browser blocks foreign sites.
-    return false;
+    // In production, no CORS_ORIGIN means block cross-origin requests.
+    if (process.env.NODE_ENV === 'production') {
+      return false;
+    }
+    // In development, allow common local dev servers.
+    return [
+      'http://localhost:5001',
+      'http://localhost:3000',
+      'http://127.0.0.1:5001',
+      'http://127.0.0.1:3000',
+    ];
   }
   return raw
     .split(',')

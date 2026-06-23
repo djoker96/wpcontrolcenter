@@ -51,6 +51,44 @@ class WPCC_Agent_Theme_Manager {
         return ['success' => true, 'message' => 'Theme updated successfully.'];
     }
 
+    /**
+     * Install a theme from a local .zip file (upload-based update).
+     *
+     * @param string $filepath Absolute path to the .zip file.
+     * @return array Result with success flag and message.
+     */
+    public function install_theme_from_upload(string $filepath): array {
+        if (!file_exists($filepath)) {
+            return ['success' => false, 'error' => 'Uploaded file not found.'];
+        }
+
+        if (!class_exists('Theme_Upgrader')) {
+            require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        }
+
+        $upgrader = new Theme_Upgrader(new Automatic_Upgrader_Skin());
+        $result = $upgrader->install($filepath);
+
+        if (is_wp_error($result)) {
+            return ['success' => false, 'error' => $result->get_error_message()];
+        }
+        if ($result === false) {
+            return ['success' => false, 'error' => 'Theme installation from upload failed.'];
+        }
+
+        // Reload themes cache
+        wp_clean_themes_cache();
+
+        // Read the installed theme slug from upgrader result
+        $installed_slug = $upgrader->result['destination_name'] ?? '';
+
+        return [
+            'success' => true,
+            'message' => 'Theme installed from upload successfully.',
+            'themeSlug' => $installed_slug,
+        ];
+    }
+
     public function delete_theme(string $theme_slug): array {
         if (!function_exists('delete_theme')) {
             require_once ABSPATH . 'wp-admin/includes/theme.php';
