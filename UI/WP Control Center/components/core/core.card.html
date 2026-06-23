@@ -1,0 +1,83 @@
+<!-- @dsCard group="Components" viewport="700x540" name="Core components" subtitle="Button · Badge · Input · Switch · Card" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; background: var(--background); font-family: var(--font-sans); color: var(--foreground); padding: 22px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .stack { display: flex; flex-direction: column; gap: 8px; }
+  .label { font-family: var(--font-display); font-size: var(--text-xs); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--muted-foreground); margin: 0 0 9px; }
+  .grp { margin-bottom: 20px; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; height:var(--control-h); padding:0 16px; font-size:var(--text-base); font-weight:var(--weight-semibold); border-radius:var(--radius-lg); cursor:pointer; }
+  .b-primary { background:var(--primary); color:var(--primary-foreground); border:1px solid var(--primary); }
+  .b-secondary { background:var(--secondary); color:var(--secondary-foreground); border:1px solid var(--border); }
+  .b-outline { background:var(--background); color:var(--foreground); border:1px solid var(--border); }
+  .b-ghost { background:transparent; color:var(--foreground); border:1px solid transparent; }
+  .b-destructive { background:var(--destructive); color:var(--danger-foreground); border:1px solid var(--destructive); }
+  .b-sm { height:var(--control-h-sm); padding:0 12px; font-size:var(--text-sm); }
+  .b-lg { height:var(--control-h-lg); padding:0 20px; font-size:var(--text-md); }
+  .badge { display:inline-flex; align-items:center; gap:8px; padding:2px 9px; font-size:var(--text-xs); font-weight:var(--weight-medium); border-radius:var(--radius-md); }
+  .dot { width:7px; height:7px; border-radius:var(--radius-full); }
+  .input { height:var(--control-h-lg); padding:0 11px; font-size:var(--text-base); color:var(--foreground); background:var(--background); border:1px solid var(--input); border-radius:var(--radius-md); width:240px; box-sizing:border-box; }
+  .switch { width:40px; height:23px; padding:2px; border-radius:var(--radius-full); display:flex; align-items:center; }
+  .knob { width:19px; height:19px; border-radius:var(--radius-full); background:var(--background); box-shadow:var(--shadow-xs); }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); width:300px; }
+  .card-h { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border); font-size:var(--text-base); font-weight:var(--weight-semibold); }
+  .card-b { padding:16px; font-size:var(--text-sm); color:var(--muted-foreground); }
+</style>
+</head>
+<body>
+  <div class="grp">
+    <p class="label">Button — variants</p>
+    <div class="row">
+      <span class="btn b-primary">Add site</span>
+      <span class="btn b-secondary">Secondary</span>
+      <span class="btn b-outline">Open tools</span>
+      <span class="btn b-ghost">Ghost</span>
+      <span class="btn b-destructive">Disable site</span>
+    </div>
+  </div>
+
+  <div class="grp">
+    <p class="label">Button — sizes</p>
+    <div class="row">
+      <span class="btn b-primary b-sm">Small</span>
+      <span class="btn b-primary">Medium</span>
+      <span class="btn b-primary b-lg">Large</span>
+    </div>
+  </div>
+
+  <div class="grp">
+    <p class="label">Badge — status tones</p>
+    <div class="row">
+      <span class="badge" style="background:color-mix(in oklch,var(--success) 14%,white);color:var(--success);border:1px solid color-mix(in oklch,var(--success) 35%,white);"><span class="dot" style="background:var(--success)"></span>Online</span>
+      <span class="badge" style="background:color-mix(in oklch,var(--warning) 16%,white);color:var(--warning-foreground);border:1px solid color-mix(in oklch,var(--warning) 38%,white);"><span class="dot" style="background:var(--warning)"></span>Updates</span>
+      <span class="badge" style="background:color-mix(in oklch,var(--danger) 12%,white);color:var(--danger);border:1px solid color-mix(in oklch,var(--danger) 32%,white);"><span class="dot" style="background:var(--danger)"></span>Down</span>
+      <span class="badge" style="background:var(--muted);color:var(--muted-foreground);border:1px solid var(--border);">Production</span>
+    </div>
+  </div>
+
+  <div class="row" style="align-items:flex-end; gap:32px;">
+    <div class="grp" style="margin:0;">
+      <p class="label">Input</p>
+      <input class="input" placeholder="https://example.com" />
+    </div>
+    <div class="grp" style="margin:0;">
+      <p class="label">Switch</p>
+      <div class="row">
+        <span class="switch" style="background:var(--primary); justify-content:flex-end;"><span class="knob"></span></span>
+        <span class="switch" style="background:var(--border); justify-content:flex-start;"><span class="knob"></span></span>
+      </div>
+    </div>
+    <div class="grp" style="margin:0;">
+      <p class="label">Card</p>
+      <div class="card">
+        <div class="card-h">Uptime (30d) <span style="font-weight:var(--weight-bold);">99.98%</span></div>
+        <div class="card-b">1 plugin · 1 theme · 1 core minor pending</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

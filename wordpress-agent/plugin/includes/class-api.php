@@ -10,7 +10,7 @@ class WPCC_Agent_API {
         register_rest_route('wpcc/v1', '/register', [
             'methods' => 'POST',
             'callback' => [$this, 'register_site'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => [$this, 'verify_request'],
         ]);
 
         register_rest_route('wpcc/v1', '/heartbeat', [
@@ -28,6 +28,36 @@ class WPCC_Agent_API {
         register_rest_route('wpcc/v1', '/execute/upload-backup', [
             'methods' => 'POST',
             'callback' => [$this, 'upload_backup'],
+            'permission_callback' => [$this, 'verify_request'],
+        ]);
+
+        register_rest_route('wpcc/v1', '/execute/install-plugin-upload', [
+            'methods' => 'POST',
+            'callback' => [$this, 'install_plugin_upload'],
+            'permission_callback' => [$this, 'verify_request'],
+        ]);
+
+        register_rest_route('wpcc/v1', '/execute/install-theme-upload', [
+            'methods' => 'POST',
+            'callback' => [$this, 'install_theme_upload'],
+            'permission_callback' => [$this, 'verify_request'],
+        ]);
+
+        register_rest_route('wpcc/v1', '/execute/object-cache-status', [
+            'methods' => 'POST',
+            'callback' => [$this, 'object_cache_status'],
+            'permission_callback' => [$this, 'verify_request'],
+        ]);
+
+        register_rest_route('wpcc/v1', '/execute/object-cache-enable', [
+            'methods' => 'POST',
+            'callback' => [$this, 'object_cache_enable'],
+            'permission_callback' => [$this, 'verify_request'],
+        ]);
+
+        register_rest_route('wpcc/v1', '/execute/object-cache-disable', [
+            'methods' => 'POST',
+            'callback' => [$this, 'object_cache_disable'],
             'permission_callback' => [$this, 'verify_request'],
         ]);
 
@@ -251,15 +281,132 @@ class WPCC_Agent_API {
         exit;
     }
 
+    /**
+     * Handle plugin installation from uploaded .zip.
+     * Raw zip binary is sent in the request body.
+     */
+    public function install_plugin_upload(WP_REST_Request $request): WP_REST_Response {
+        $body = $request->get_body();
+        if (empty($body)) {
+            return new WP_REST_Response(['success' => false, 'error' => 'Empty upload body.'], 400);
+        }
+
+        // Save to a temp file
+        $tmp_dir = WP_CONTENT_DIR . '/wpcc-uploads';
+        if (!file_exists($tmp_dir)) {
+            wp_mkdir_p($tmp_dir);
+        }
+        $tmp_file = $tmp_dir . '/' . uniqid('plugin-', true) . '.zip';
+        if (file_put_contents($tmp_file, $body) === false) {
+            return new WP_REST_Response(['success' => false, 'error' => 'Failed to save uploaded file.'], 500);
+        }
+
+        // Reject anything that is not a real ZIP archive before handing to the installer.
+        if (!wpcc_agent_is_zip_file($tmp_file)) {
+            @unlink($tmp_file);
+            return new WP_REST_Response(['success' => false, 'error' => 'Uploaded file is not a valid ZIP archive.'], 400);
+        }
+
+        $result = (new WPCC_Agent_Plugin_Manager())->install_plugin_from_upload($tmp_file);
+
+        // Clean up the temp file
+        @unlink($tmp_file);
+
+        $status = $result['success'] ? 200 : 500;
+        return new WP_REST_Response($result, $status);
+    }
+
+    /**
+     * Handle theme installation from uploaded .zip.
+     * Raw zip binary is sent in the request body.
+     */
+    public function install_theme_upload(WP_REST_Request $request): WP_REST_Response {
+        $body = $request->get_body();
+        if (empty($body)) {
+            return new WP_REST_Response(['success' => false, 'error' => 'Empty upload body.'], 400);
+        }
+
+        // Save to a temp file
+        $tmp_dir = WP_CONTENT_DIR . '/wpcc-uploads';
+        if (!file_exists($tmp_dir)) {
+            wp_mkdir_p($tmp_dir);
+        }
+        $tmp_file = $tmp_dir . '/' . uniqid('theme-', true) . '.zip';
+        if (file_put_contents($tmp_file, $body) === false) {
+            return new WP_REST_Response(['success' => false, 'error' => 'Failed to save uploaded file.'], 500);
+        }
+
+        // Reject anything that is not a real ZIP archive before handing to the installer.
+        if (!wpcc_agent_is_zip_file($tmp_file)) {
+            @unlink($tmp_file);
+            return new WP_REST_Response(['success' => false, 'error' => 'Uploaded file is not a valid ZIP archive.'], 400);
+        }
+
+        $result = (new WPCC_Agent_Theme_Manager())->install_theme_from_upload($tmp_file);
+
+        // Clean up the temp file
+        @unlink($tmp_file);
+
+        $status = $result['success'] ? 200 : 500;
+        return new WP_REST_Response($result, $status);
+    }
+
+    /**
+     * Get object cache status.
+     */
+    public function object_cache_status(WP_REST_Request $request): WP_REST_Response {
+        $manager = new WPCC_Agent_Object_Cache_Manager();
+        return new WP_REST_Response($manager->status(), 200);
+    }
+
+    /**
+     * Enable object cache.
+     */
+    public function object_cache_enable(WP_REST_Request $request): WP_REST_Response {
+        $manager = new WPCC_Agent_Object_Cache_Manager();
+        $result = $manager->enable();
+        return new WP_REST_Response($result, $result['success'] ? 200 : 500);
+    }
+
+    /**
+     * Disable object cache.
+     */
+    public function object_cache_disable(WP_REST_Request $request): WP_REST_Response {
+        $manager = new WPCC_Agent_Object_Cache_Manager();
+        $result = $manager->disable();
+        return new WP_REST_Response($result, $result['success'] ? 200 : 500);
+    }
+
     public function upload_backup(WP_REST_Request $request) {
         $filename = basename($request->get_param('filename'));
+
+        // Only allow backup artifacts produced by this agent: .zip or .sql.
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        if (!in_array($ext, ['zip', 'sql'], true)) {
+            return new WP_REST_Response(['success' => false, 'message' => 'Disallowed backup file type.'], 400);
+        }
+
+        $body = $request->get_body();
+        if (empty($body)) {
+            return new WP_REST_Response(['success' => false, 'message' => 'Empty upload body.'], 400);
+        }
+
+        // A .zip must start with the ZIP magic bytes (blocks polyglot/non-zip payloads).
+        if ($ext === 'zip' && substr($body, 0, 4) !== "PK\x03\x04" && substr($body, 0, 4) !== "PK\x05\x06") {
+            return new WP_REST_Response(['success' => false, 'message' => 'Uploaded file is not a valid ZIP archive.'], 400);
+        }
+
+        // A .sql must not carry executable payloads (PHP tags / NUL bytes).
+        if ($ext === 'sql' && (strpos($body, '<?php') !== false || strpos($body, '<?=') !== false || strpos($body, "\0") !== false)) {
+            return new WP_REST_Response(['success' => false, 'message' => 'Uploaded SQL file failed content validation.'], 400);
+        }
+
         $backup_dir = WP_CONTENT_DIR . '/wpcc-backups';
         if (!file_exists($backup_dir)) {
             wp_mkdir_p($backup_dir);
         }
         $filepath = $backup_dir . '/' . $filename;
-        
-        $body = $request->get_body();
+
         if (file_put_contents($filepath, $body) !== false) {
             return new WP_REST_Response(['success' => true, 'filename' => $filename], 200);
         }

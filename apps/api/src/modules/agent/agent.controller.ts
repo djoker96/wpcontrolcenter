@@ -1,4 +1,5 @@
 import { Body, Controller, Post, UseGuards, Req } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AgentService } from './agent.service';
 import { AgentGuard } from '../../common/guards/agent.guard';
 
@@ -6,6 +7,8 @@ import { AgentGuard } from '../../common/guards/agent.guard';
 export class AgentController {
   constructor(private readonly agentService: AgentService) {}
 
+  // Tight rate limit: register is an unauthenticated token-consuming endpoint.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('register')
   async register(
     @Body() body: { connectionToken: string; siteUrl: string; domain: string },

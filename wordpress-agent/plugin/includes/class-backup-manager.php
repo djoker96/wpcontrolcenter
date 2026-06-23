@@ -8,8 +8,13 @@ class WPCC_Agent_Backup_Manager {
         $this->backup_dir = WP_CONTENT_DIR . '/wpcc-backups';
         if (!file_exists($this->backup_dir)) {
             wp_mkdir_p($this->backup_dir);
-            // Write htaccess to deny public web access for safety
-            file_put_contents($this->backup_dir . '/.htaccess', "Deny from all\n");
+            // Defense-in-depth: prevent public web access across server stacks.
+            // Apache 2.4 + 2.2 compat .htaccess
+            file_put_contents($this->backup_dir . '/.htaccess', "# Apache 2.4\nRequire all denied\n# Apache 2.2 compat\nDeny from all\n");
+            // nginx ignores .htaccess; silent index.html blocks directory listing
+            file_put_contents($this->backup_dir . '/index.html', '');
+            // IIS hiddenSegments (web.config)
+            file_put_contents($this->backup_dir . '/web.config', '<?xml version="1.0"?><configuration><system.webServer><security><requestFiltering><hiddenSegments><add segment="wpcc-backups"/></hiddenSegments></requestFiltering></security></system.webServer></configuration>');
             file_put_contents($this->backup_dir . '/index.php', "<?php\n// Silence\n");
         }
     }
@@ -82,25 +87,23 @@ class WPCC_Agent_Backup_Manager {
             } elseif (strpos($filename, 'files-backup') !== false) {
                 $this->restore_files($filepath);
             } elseif (strpos($filename, 'full-backup') !== false) {
-                // Extract full zip
-                $zip = new ZipArchive();
-                if ($zip->open($filepath) === true) {
-                    $zip->extractTo($this->backup_dir);
-                    $zip->close();
-                    
-                    // Look for extracted items
-                    $pattern = $this->backup_dir . '/*';
-                    foreach (glob($pattern) as $file) {
+                // Extract into a unique temp subdir (Zip-Slip safe) so the restore
+                // loop only touches THIS archive's contents, not stale backups.
+                $tmp_dir = $this->backup_dir . '/.restore-' . uniqid('', true);
+                wp_mkdir_p($tmp_dir);
+                try {
+                    wpcc_agent_safe_extract_zip($filepath, $tmp_dir);
+                    foreach (glob($tmp_dir . '/*') as $file) {
                         if (strpos($file, 'db-backup') !== false) {
                             $this->restore_db($file);
-                            @unlink($file);
                         } elseif (strpos($file, 'files-backup') !== false) {
                             $this->restore_files($file);
-                            @unlink($file);
                         }
                     }
-                } else {
-                    throw new Exception('Failed to extract full ZIP backup.');
+                } finally {
+                    // Clean up extracted artifacts regardless of outcome.
+                    foreach (glob($tmp_dir . '/*') as $file) { @unlink($file); }
+                    @rmdir($tmp_dir);
                 }
             }
             return ['success' => true, 'message' => 'Restore completed successfully.'];
@@ -145,14 +148,15 @@ class WPCC_Agent_Backup_Manager {
         if ($queries === false) {
             throw new Exception('Cannot read database backup SQL file');
         }
-        // Basic SQL parser for executing multiple statements (split by semicolon)
-        // We need to handle cases where semicolons exist inside quotes, but for basic dump it's usually safe
-        $queries = explode(";\n", $queries);
-        foreach ($queries as $query) {
-            $query = trim($query);
-            if (!empty($query)) {
-                $wpdb->query($query);
-            }
+        // Reject dumps carrying executable/web-shell payloads — a .sql restore
+        // should never contain PHP tags or NUL bytes.
+        if (strpos($queries, '<?php') !== false || strpos($queries, '<?=') !== false || strpos($queries, "\0") !== false) {
+            throw new Exception('Backup SQL file failed content validation.');
+        }
+        // Quote-aware split so semicolons/newlines inside values cannot break or
+        // inject statements (see wpcc_agent_split_sql).
+        foreach (wpcc_agent_split_sql($queries) as $query) {
+            $wpdb->query($query);
         }
     }
 
@@ -189,12 +193,7 @@ class WPCC_Agent_Backup_Manager {
     }
 
     private function restore_files($filepath) {
-        $zip = new ZipArchive();
-        if ($zip->open($filepath) === true) {
-            $zip->extractTo(WP_CONTENT_DIR);
-            $zip->close();
-        } else {
-            throw new Exception('Failed to extract zip file');
-        }
+        // Zip-Slip safe extraction: rejects entries that escape WP_CONTENT_DIR.
+        wpcc_agent_safe_extract_zip($filepath, WP_CONTENT_DIR);
     }
 }

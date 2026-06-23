@@ -44,12 +44,15 @@ enum JobType {
   UPDATE_CORE
   UPDATE_PLUGIN
   UPDATE_THEME
+  UPLOAD_PLUGIN
+  UPLOAD_THEME
   ACTIVATE_PLUGIN
   DEACTIVATE_PLUGIN
   INSTALL_PLUGIN
   DELETE_PLUGIN
   DELETE_THEME
   TOGGLE_MAINTENANCE
+  TOGGLE_OBJECT_CACHE
   CLEAR_CACHE
   OPTIMIZE_DATABASE
   UPDATE_ROBOTS_TXT
@@ -73,8 +76,11 @@ enum JobTargetType {
   CORE
   PLUGIN
   THEME
+  UPLOAD_PLUGIN
+  UPLOAD_THEME
   CONFIG
   CACHE
+  OBJECT_CACHE
   DATABASE
 }
 
@@ -146,6 +152,7 @@ model User {
   fullName     String?    @map("full_name")
   role         UserRole   @default(ADMIN)
   isActive     Boolean    @default(true) @map("is_active")
+  tokenVersion Int        @default(0) @map("token_version")
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
@@ -153,6 +160,7 @@ model User {
   auditLogs              AuditLog[]
   maintenanceSnapshots   MaintenanceSnapshot[]
   passwordResetTokens    PasswordResetToken[]
+  integrationAccounts    IntegrationAccount[]
 
   @@map("users")
 }
@@ -170,6 +178,8 @@ model Site {
   status             SiteStatus        @default(ACTIVE)
   connectionStatus   ConnectionStatus  @default(PENDING) @map("connection_status")
   maintenanceMode    Boolean           @default(false) @map("maintenance_mode")
+  objectCacheEnabled Boolean           @default(false) @map("object_cache_enabled")
+  objectCacheType    String?           @default("Redis") @map("object_cache_type")
   ga4PropertyId      String?           @map("ga4_property_id")
   gscSiteUrl         String?           @map("gsc_site_url")
   notes              String?
@@ -206,6 +216,7 @@ model SiteCredential {
   publicKey                String   @map("public_key")
   secretKeyEncrypted       String   @map("secret_key_encrypted")
   connectionTokenEncrypted String?  @map("connection_token_encrypted")
+  connectionTokenHash      String?  @unique @map("connection_token_hash")
   lastRotatedAt            DateTime? @map("last_rotated_at")
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")
@@ -498,6 +509,8 @@ model IntegrationAccount {
   expiresAt             DateTime?          @map("expires_at")
   metadataJson          Json?              @map("metadata_json")
   status                IntegrationStatus  @default(ACTIVE)
+  ownerId               String?            @map("owner_id")
+  owner                 User?              @relation(fields: [ownerId], references: [id])
   createdAt             DateTime           @default(now()) @map("created_at")
   updatedAt             DateTime           @updatedAt @map("updated_at")
 
@@ -518,7 +531,7 @@ model SiteIntegration {
   updatedAt              DateTime          @updatedAt @map("updated_at")
 
   site               Site               @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  integrationAccount IntegrationAccount @relation(fields: [integrationAccountId], references: [id], onDelete: Cascade)
+  integrationAccount IntegrationAccount @relation(fields: [integrationAccountId], references: [id], onDelete: Restrict)
 
   @@unique([siteId, provider])
   @@index([integrationAccountId])

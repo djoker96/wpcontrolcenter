@@ -74,6 +74,8 @@ test('restoreBackupJob creates job record and enqueues BullMQ job', async () => 
   const prisma = {
     siteBackup: {
       findUnique: async ({ where }: any) => (where.id === backupId ? { id: backupId, siteId } : null),
+      findFirst: async ({ where }: any) =>
+        where.id === backupId && where.siteId === siteId ? { id: backupId, siteId } : null,
     },
     job: {
       create: async ({ data }: any) => {

@@ -8,7 +8,8 @@
     "generate": "prisma generate",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts",
+    "rotate-key": "ts-node scripts/rotate-encryption-key.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",

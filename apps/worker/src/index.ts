@@ -1,16 +1,61 @@
 import { Worker, Job as BullJob } from 'bullmq';
 import { PrismaClient, JobStatus, LogLevel, AuditResult, AnalyticsSource, NotificationChannelType, NotificationDeliveryStatus } from '@wpcc/database';
-import { decrypt, encrypt } from '@wpcc/shared';
+import { decrypt, encrypt, assertPublicUrl } from '@wpcc/shared';
 import { createHmac } from 'node:crypto';
-import * as dotenv from 'dotenv';
 import { setInterval } from 'node:timers';
 import * as path from 'node:path';
 import * as tls from 'node:tls';
 import * as fs from 'node:fs';
+import * as dotenv from 'dotenv';
+import { handleUploadJob } from './handlers/upload.handler';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const prisma = new PrismaClient();
+
+/**
+ * Wrapper around fetch() that aborts after a timeout, preventing the worker
+ * from hanging indefinitely on unresponsive WordPress agents / notification
+ * endpoints / Google APIs.
+ *
+ * @param url   Target URL
+ * @param init  Fetch init (signal, if provided, is composed with the timeout)
+ * @param timeoutMs  Abort after this many milliseconds (default 30s)
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = 30_000,
+): Promise<Response> {
+  // SSRF guard: block private/loopback/link-local/metadata targets for every
+  // outbound request (WP sites + user-configured notification webhooks). Public
+  // hosts (incl. Google APIs) pass through.
+  await assertPublicUrl(url);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  // Compose with any caller-supplied signal so both can trigger abort
+  const externalSignal = init.signal;
+  if (externalSignal) {
+    if (typeof externalSignal.addEventListener === 'function') {
+      externalSignal.addEventListener('abort', () => controller.abort());
+    } else if ((externalSignal as AbortSignal).aborted) {
+      controller.abort();
+    }
+  }
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error(`Request to ${url} timed out after ${timeoutMs}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 function getEncryptionKey(): string {
   const key = process.env.AGENT_ENCRYPTION_KEY;
@@ -30,6 +75,7 @@ function getActionSlug(jobType: string): string {
     case 'DELETE_THEME': return 'delete-theme';
     case 'UPDATE_CORE': return 'update-core';
     case 'TOGGLE_MAINTENANCE': return 'toggle-maintenance';
+    case 'TOGGLE_OBJECT_CACHE': return 'object-cache-status';
     case 'INSTALL_PLUGIN': return 'install-plugin';
     case 'CLEAR_CACHE': return 'clear-cache';
     case 'OPTIMIZE_DATABASE': return 'optimize-database';
@@ -67,7 +113,7 @@ async function resyncSite(siteId: string, secretKey: string, siteUrl: string) {
   const signature = createHmac('sha256', secretKey).update(message).digest('hex');
 
   const targetUrl = `${siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/sync-inventory`;
-  const response = await fetch(targetUrl, {
+  const response = await fetchWithTimeout(targetUrl, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -75,7 +121,7 @@ async function resyncSite(siteId: string, secretKey: string, siteUrl: string) {
       'x-wpcc-timestamp': timestamp,
     },
     body: bodyStr,
-  });
+  }, 30_000);
 
   if (!response.ok) {
     throw new Error(`Inventory sync returned status ${response.status}`);
@@ -222,7 +268,7 @@ async function handleCreateBackupJob(jobId: string) {
   const targetUrl = `${job.site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/create-backup`;
 
   try {
-    const response = await fetch(targetUrl, {
+    const response = await fetchWithTimeout(targetUrl, {
       method,
       headers: {
         'Content-Type': 'application/json',
@@ -230,7 +276,7 @@ async function handleCreateBackupJob(jobId: string) {
         'x-wpcc-timestamp': timestamp,
       },
       body: bodyStr,
-    });
+    }, 30_000);
 
     if (!response.ok) {
       throw new Error(`Agent backup create returned status ${response.status}`);
@@ -246,23 +292,28 @@ async function handleCreateBackupJob(jobId: string) {
     // Now download the backup file from Agent
     const downloadPath = `/wpcc/v1/execute/download-backup`;
     const downloadQuery = `?filename=${encodeURIComponent(filename)}`;
-    const downloadMsg = `GET|${downloadPath}|${timestamp}|`;
+    // Query string MUST be inside the signed message so the agent can authenticate
+    // the filename param (matches $_SERVER['QUERY_STRING'] on the agent side).
+    const downloadMsg = `GET|${downloadPath}${downloadQuery}|${timestamp}|`;
     const downloadSignature = createHmac('sha256', secretKey).update(downloadMsg).digest('hex');
     const downloadTarget = `${job.site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/download-backup${downloadQuery}`;
 
-    const fileRes = await fetch(downloadTarget, {
+    const fileRes = await fetchWithTimeout(downloadTarget, {
       method: 'GET',
       headers: {
         'x-wpcc-signature': downloadSignature,
         'x-wpcc-timestamp': timestamp,
       },
-    });
+    }, 120_000); // 2 min — backup download can be large
 
     if (!fileRes.ok) {
       throw new Error(`Failed to download backup: HTTP ${fileRes.status}`);
     }
 
-    const storageDir = path.resolve(__dirname, '../../storage/backups', job.siteId);
+    const backupsRoot = process.env.WPCC_BACKUPS_DIR
+      ? path.resolve(process.env.WPCC_BACKUPS_DIR)
+      : path.resolve(__dirname, '../../storage/backups');
+    const storageDir = path.join(backupsRoot, job.siteId);
     if (!fs.existsSync(storageDir)) {
       fs.mkdirSync(storageDir, { recursive: true });
     }
@@ -276,7 +327,7 @@ async function handleCreateBackupJob(jobId: string) {
     const deleteBody = JSON.stringify({ filename });
     const deleteMsg = `POST|/wpcc/v1/execute/delete-backup|${timestamp}|${deleteBody}`;
     const deleteSignature = createHmac('sha256', secretKey).update(deleteMsg).digest('hex');
-    await fetch(deleteTarget, {
+    await fetchWithTimeout(deleteTarget, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -284,7 +335,7 @@ async function handleCreateBackupJob(jobId: string) {
         'x-wpcc-timestamp': timestamp,
       },
       body: deleteBody,
-    });
+    }, 15_000);
 
     const downloadUrl = `/api/sites/${job.siteId}/backups/${backupId}/download`;
     await prisma.siteBackup.update({
@@ -338,15 +389,16 @@ async function handleRestoreBackupJob(jobId: string) {
     const fileData = fs.readFileSync(filePath);
     const uploadPath = '/wpcc/v1/execute/upload-backup';
     const uploadQuery = `?filename=${encodeURIComponent(backup.filename)}`;
-    // For binary body, hash/HMAC is calculated over raw bytes
+    // For binary body, hash/HMAC is calculated over raw bytes. Query string is
+    // included so the agent can authenticate the filename param.
     const messageBytes = Buffer.concat([
-      Buffer.from(`POST|${uploadPath}|${timestamp}|`),
+      Buffer.from(`POST|${uploadPath}${uploadQuery}|${timestamp}|`),
       fileData
     ]);
     const uploadSignature = createHmac('sha256', secretKey).update(messageBytes).digest('hex');
     const uploadTarget = `${job.site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/upload-backup${uploadQuery}`;
 
-    const uploadRes = await fetch(uploadTarget, {
+    const uploadRes = await fetchWithTimeout(uploadTarget, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/octet-stream',
@@ -354,7 +406,7 @@ async function handleRestoreBackupJob(jobId: string) {
         'x-wpcc-timestamp': timestamp,
       },
       body: fileData,
-    });
+    }, 120_000); // 2 min — backup upload can be large
 
     if (!uploadRes.ok) {
       throw new Error(`Failed to upload backup to Agent: HTTP ${uploadRes.status}`);
@@ -366,7 +418,7 @@ async function handleRestoreBackupJob(jobId: string) {
     const restoreMsg = `POST|/wpcc/v1/execute/restore-backup|${timestamp}|${restoreBody}`;
     const restoreSignature = createHmac('sha256', secretKey).update(restoreMsg).digest('hex');
 
-    const restoreRes = await fetch(restoreTarget, {
+    const restoreRes = await fetchWithTimeout(restoreTarget, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -374,7 +426,7 @@ async function handleRestoreBackupJob(jobId: string) {
         'x-wpcc-timestamp': timestamp,
       },
       body: restoreBody,
-    });
+    }, 60_000); // 1 min — restore can take time
 
     if (!restoreRes.ok) {
       throw new Error(`Failed to restore backup: HTTP ${restoreRes.status}`);
@@ -393,7 +445,14 @@ async function handleRestoreBackupJob(jobId: string) {
 }
 
 const redisHost = process.env.REDIS_HOST || 'localhost';
-const redisPort = process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6380;
+const redisPort = process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6379;
+// REDIS_PASSWORD is optional in dev but should be set in prod (see docker-compose).
+const redisPassword = process.env.REDIS_PASSWORD || undefined;
+const redisConnection = {
+  host: redisHost,
+  port: redisPort,
+  ...(redisPassword ? { password: redisPassword } : {}),
+};
 
 const worker = new Worker(
   'jobs',
@@ -425,8 +484,24 @@ const worker = new Worker(
       await handleRestoreBackupJob(jobId);
       return;
     }
+    if (dbJob.jobType === 'UPLOAD_PLUGIN' || dbJob.jobType === 'UPLOAD_THEME') {
+      await handleUploadJob(prisma, jobId);
+      return;
+    }
 
-    const actionSlug = getActionSlug(dbJob.jobType);
+    // Resolve action slug, with special handling for object cache
+    let actionSlug = getActionSlug(dbJob.jobType);
+
+    if (dbJob.jobType === 'TOGGLE_OBJECT_CACHE') {
+      const payload = (dbJob.payloadJson as Record<string, any>) || {};
+      if (payload.enabled === true) {
+        actionSlug = 'object-cache-enable';
+      } else if (payload.enabled === false) {
+        actionSlug = 'object-cache-disable';
+      } else {
+        actionSlug = 'object-cache-status';
+      }
+    }
 
     // Move job to RUNNING state
     await prisma.job.update({
@@ -481,6 +556,9 @@ const worker = new Worker(
 
       await logToJob(jobId, LogLevel.INFO, `Sending request to WordPress Agent: POST ${targetUrl}`);
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30_000); // 30s timeout
+
       const response = await fetch(targetUrl, {
         method,
         headers: {
@@ -489,7 +567,10 @@ const worker = new Worker(
           'x-wpcc-timestamp': timestamp,
         },
         body: bodyStr,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`WordPress Agent responded with HTTP status ${response.status}`);
@@ -553,6 +634,39 @@ const worker = new Worker(
       await resyncSite(site.id, secretKey, site.siteUrl);
       await logToJob(jobId, LogLevel.INFO, 'Site inventory resync completed.');
 
+      // After-action: sync maintenance mode field
+      if (dbJob.jobType === 'TOGGLE_MAINTENANCE') {
+        const enabled = bodyObj.enabled === true;
+        await prisma.site.update({
+          where: { id: site.id },
+          data: { maintenanceMode: enabled },
+        });
+        await logToJob(jobId, LogLevel.INFO, `Site maintenance mode set to ${enabled}`);
+      }
+
+      // After-action: sync object cache fields
+      if (dbJob.jobType === 'TOGGLE_OBJECT_CACHE') {
+        const payload = (dbJob.payloadJson as Record<string, any>) || {};
+        if (payload.enabled !== undefined) {
+          await prisma.site.update({
+            where: { id: site.id },
+            data: { objectCacheEnabled: payload.enabled === true },
+          });
+        } else {
+          // Status check: update from agent response
+          const result = resBody as any;
+          if (result && typeof result.enabled === 'boolean') {
+            await prisma.site.update({
+              where: { id: site.id },
+              data: {
+                objectCacheEnabled: result.enabled,
+                objectCacheType: result.backend || 'Unknown',
+              },
+            });
+          }
+        }
+      }
+
     } catch (err: any) {
       console.error(`[worker] Job ${jobId} failed:`, err);
       const errorMsg = err.message || 'Unknown error occurred';
@@ -581,10 +695,10 @@ const worker = new Worker(
     }
   },
   {
-    connection: {
-      host: redisHost,
-      port: redisPort,
-    },
+    connection: redisConnection,
+    // Worker-level options for detecting and retrying hung jobs
+    stalledInterval: 30_000,       // Check every 30s for stalled jobs
+    maxStalledCount: 1,           // Retry once if stalled, then fail
   }
 );
 
@@ -640,7 +754,7 @@ async function dispatchNotifications(incidentId: string, eventType: 'INCIDENT_OP
             success = true;
             payload = { message: messageText, simulated: true };
           } else if (channel.channelType === NotificationChannelType.WEBHOOK) {
-            const res = await fetch(channel.destination, {
+            const res = await fetchWithTimeout(channel.destination, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -648,26 +762,26 @@ async function dispatchNotifications(incidentId: string, eventType: 'INCIDENT_OP
                 site: { id: incident.siteId, name: incident.site?.name, url: incident.site?.siteUrl },
                 incident: { id: incident.id, severity: incident.severity, summary: incident.summary, startedAt: incident.startedAt }
               }),
-            });
+            }, 10_000);
             success = res.ok;
             payload = { statusCode: res.status };
           } else if (channel.channelType === NotificationChannelType.SLACK || channel.channelType === NotificationChannelType.DISCORD) {
-            const res = await fetch(channel.destination, {
+            const res = await fetchWithTimeout(channel.destination, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ text: messageText }),
-            });
+            }, 10_000);
             success = res.ok;
             payload = { statusCode: res.status };
           } else if (channel.channelType === NotificationChannelType.TELEGRAM) {
             const [botToken, chatId] = channel.destination.split(':');
             if (botToken && chatId) {
               const tgUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
-              const res = await fetch(tgUrl, {
+              const res = await fetchWithTimeout(tgUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chat_id: chatId, text: messageText }),
-              });
+              }, 10_000);
               success = res.ok;
               payload = await res.json();
             } else {
@@ -853,7 +967,7 @@ async function getValidAccessToken(accountId: string): Promise<string> {
     throw new Error('Google OAuth configurations are missing');
   }
 
-  const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+  const refreshResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -864,7 +978,7 @@ async function getValidAccessToken(accountId: string): Promise<string> {
       refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }),
-  });
+  }, 15_000);
 
   if (!refreshResponse.ok) {
     await prisma.integrationAccount.update({
@@ -918,7 +1032,7 @@ async function syncAnalyticsData() {
         // 1. Sync GA4 Data
         if (integration.externalPropertyId) {
           // GA4 Daily
-          const ga4DailyRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${integration.externalPropertyId}:runReport`, {
+          const ga4DailyRes = await fetchWithTimeout(`https://analyticsdata.googleapis.com/v1beta/properties/${integration.externalPropertyId}:runReport`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -933,7 +1047,7 @@ async function syncAnalyticsData() {
                 { name: 'screenPageViews' }
               ],
             }),
-          });
+          }, 30_000);
 
           if (ga4DailyRes.ok) {
             const ga4DailyData = (await ga4DailyRes.json()) as any;
@@ -973,7 +1087,7 @@ async function syncAnalyticsData() {
           }
 
           // GA4 Top Pages
-          const ga4PagesRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${integration.externalPropertyId}:runReport`, {
+          const ga4PagesRes = await fetchWithTimeout(`https://analyticsdata.googleapis.com/v1beta/properties/${integration.externalPropertyId}:runReport`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1030,7 +1144,7 @@ async function syncAnalyticsData() {
         // 2. Sync GSC Data
         if (integration.externalSiteIdentifier) {
           // GSC Daily
-          const gscDailyRes = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(integration.externalSiteIdentifier)}/searchAnalytics/query`, {
+          const gscDailyRes = await fetchWithTimeout(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(integration.externalSiteIdentifier)}/searchAnalytics/query`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1041,7 +1155,7 @@ async function syncAnalyticsData() {
               endDate: endDateStr,
               dimensions: ['date'],
             }),
-          });
+          }, 30_000);
 
           if (gscDailyRes.ok) {
             const gscDailyData = (await gscDailyRes.json()) as any;
@@ -1077,7 +1191,7 @@ async function syncAnalyticsData() {
           }
 
           // GSC Top Pages
-          const gscPagesRes = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(integration.externalSiteIdentifier)}/searchAnalytics/query`, {
+          const gscPagesRes = await fetchWithTimeout(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(integration.externalSiteIdentifier)}/searchAnalytics/query`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1089,7 +1203,7 @@ async function syncAnalyticsData() {
               dimensions: ['date', 'page'],
               rowLimit: 20,
             }),
-          });
+          }, 30_000);
 
           if (gscPagesRes.ok) {
             const gscPagesData = (await gscPagesRes.json()) as any;

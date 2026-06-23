@@ -30,8 +30,12 @@ export class RolesGuard implements CanActivate {
       [UserRole.VIEWER]: 1,
     };
 
-    const userWeight = roleHierarchy[user.role as UserRole] || 0;
-    
+    // Reject unknown/forged roles outright instead of silently treating them as weight 0.
+    const userWeight = roleHierarchy[user.role as UserRole];
+    if (userWeight === undefined) {
+      throw new ForbiddenException('Access denied: unknown role');
+    }
+
     // Check if user has sufficient access level for any of the required roles
     const isAuthorized = requiredRoles.some(role => userWeight >= roleHierarchy[role]);
 

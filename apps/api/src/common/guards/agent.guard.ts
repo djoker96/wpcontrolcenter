@@ -34,6 +34,11 @@ export class AgentGuard implements CanActivate {
       throw new UnauthorizedException('Invalid site credentials');
     }
 
+    // Ensure the credential belongs to the claimed site (prevent cross-site impersonation)
+    if (credentials.siteId !== siteId) {
+      throw new UnauthorizedException('Credential site mismatch');
+    }
+
     const encKey = getAgentEncryptionKey();
     let secretKey = '';
     try {
@@ -55,7 +60,10 @@ export class AgentGuard implements CanActivate {
     const message = `${method}|${path}|${timestamp}|${bodyStr}`;
     const expectedSignature = crypto.createHmac('sha256', secretKey).update(message).digest('hex');
 
-    if (signature !== expectedSignature) {
+    // Constant-time comparison to avoid leaking the signature via timing.
+    const sigBuf = Buffer.from(signature, 'hex');
+    const expBuf = Buffer.from(expectedSignature, 'hex');
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
       throw new UnauthorizedException('Invalid request signature');
     }
 

@@ -1,21 +1,56 @@
-# Next.js template
+# WP Control Center
 
-This is a Next.js template with shadcn/ui.
+WP Control Center là hệ thống quản trị tập trung cho nhiều website WordPress. Hệ thống gồm dashboard Next.js, API NestJS, worker BullMQ, PostgreSQL/Prisma, Redis và plugin agent cài trên từng website WordPress.
 
-## Adding components
+## Khả năng chính
 
-To add components to your app, run the following command:
+- Đăng nhập và phân quyền `SUPER_ADMIN`, `ADMIN`, `OPERATOR`, `VIEWER` ở API.
+- Thêm website, tạo connection token và kết nối plugin agent.
+- Đồng bộ WordPress core, plugin, theme và thông tin hệ thống.
+- Chạy tác vụ từ xa qua queue: update, activate/deactivate, cài/xóa plugin, update/xóa theme, update core, maintenance mode, clear cache, tối ưu database và sửa file cấu hình.
+- Uptime monitoring, incident, audit log và thông báo qua webhook, Slack, Discord, Telegram.
+- Kết nối Google OAuth, GA4 và Google Search Console.
+- Diagnostics: dung lượng đĩa, WP-Cron, PHP log, SSL.
+- PageSpeed/Lighthouse history.
+- Backup/restore database, files hoặc full site.
+
+Danh mục đầy đủ, mức độ hoàn thiện và kết quả review mới nhất nằm tại [Markdown/feature_inventory_and_review.md](Markdown/feature_inventory_and_review.md).
+
+## Cấu trúc
+
+```text
+apps/web          Next.js dashboard
+apps/api          NestJS REST API
+apps/worker       BullMQ jobs và background schedulers
+packages/database Prisma schema, migration, seed
+packages/shared   Crypto và kiểu dùng chung
+wordpress-agent   Plugin agent cho WordPress
+```
+
+## Chạy local
 
 ```bash
-npx shadcn@latest add button
+npm install
+docker compose up -d
+npm run db:generate
+npm run db:migrate
+npm run db:seed
+npm run dev:api
+npm run dev:web
+npm run dev:worker
 ```
 
-This will place the ui components in the `components` directory.
+Sao chép `.env.example` thành `.env` và cấu hình tối thiểu `DATABASE_URL`, `REDIS_HOST`, `REDIS_PORT`, `JWT_SECRET`, `AGENT_ENCRYPTION_KEY` trước khi chạy.
 
-## Using components
+## Kiểm tra
 
-To use the components in your app, import them as follows:
-
-```tsx
-import { Button } from "@/components/ui/button";
+```bash
+npm run build:all
+npm run lint -w apps/api
+npm run lint -w apps/web
+npm run test -w apps/api
+npm run typecheck -w apps/api
+npm run typecheck -w apps/web
 ```
+
+> Trạng thái ngày 2026-06-21: web và API build/typecheck được; API test pass; worker build và web lint đang có blocker được mô tả trong tài liệu review.

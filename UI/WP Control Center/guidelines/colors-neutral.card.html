@@ -1,0 +1,17 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Neutrals & surfaces" subtitle="Background, foreground, muted, border" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<style>
+  body{margin:0;background:var(--background);font-family:var(--font-sans);padding:20px;display:flex;gap:16px;}
+  .sw{flex:1;}
+  .chip{height:64px;border:1px solid var(--border);border-radius:var(--radius-lg);}
+  .name{font-size:var(--text-sm);font-weight:var(--weight-semibold);color:var(--foreground);margin:9px 0 2px;}
+  .val{font-size:var(--text-xs);color:var(--muted-foreground);font-family:var(--font-mono);}
+</style></head>
+<body>
+  <div class="sw"><div class="chip" style="background:var(--background)"></div><div class="name">background / card</div><div class="val">oklch(1 0 0)</div></div>
+  <div class="sw"><div class="chip" style="background:var(--foreground)"></div><div class="name">foreground</div><div class="val">oklch(.145 0 0)</div></div>
+  <div class="sw"><div class="chip" style="background:var(--muted)"></div><div class="name">muted</div><div class="val">oklch(.97 0 0)</div></div>
+  <div class="sw"><div class="chip" style="background:var(--muted-foreground)"></div><div class="name">muted-foreground</div><div class="val">oklch(.556 0 0)</div></div>
+  <div class="sw"><div class="chip" style="background:var(--border)"></div><div class="name">border / input</div><div class="val">oklch(.922 0 0)</div></div>
+</body></html>

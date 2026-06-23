@@ -2,11 +2,12 @@ import { Injectable, NotFoundException, BadRequestException, Inject } from '@nes
 import { PrismaService } from '../database/prisma.service';
 import { CreateSiteDto } from './dto/create-site.dto';
 import { UpdateSiteDto } from './dto/update-site.dto';
-import { encrypt, decrypt } from '../../common/utils/crypto.utils';
+import { encrypt, decrypt, hashConnectionToken } from '../../common/utils/crypto.utils';
 import { randomBytes, createHmac } from 'node:crypto';
 import { Queue } from 'bullmq';
-import { JobType, JobTargetType } from '@wpcc/database';
+import { JobType, JobTargetType, IntegrationProvider, IntegrationStatus } from '@wpcc/database';
 import { getAgentEncryptionKey } from '../../config/env';
+import { assertPublicUrl } from '@wpcc/shared';
 
 @Injectable()
 export class SitesService {
@@ -22,6 +23,7 @@ export class SitesService {
 
     const encKey = getAgentEncryptionKey();
     const connectionTokenEncrypted = encrypt(connectionToken, encKey);
+    const connectionTokenHash = hashConnectionToken(connectionToken, encKey);
     const secretKeyEncrypted = encrypt(secretKey, encKey);
 
     const site = await this.prisma.site.create({
@@ -35,6 +37,7 @@ export class SitesService {
             publicKey,
             secretKeyEncrypted,
             connectionTokenEncrypted,
+            connectionTokenHash,
           },
         },
         setting: {
@@ -126,11 +129,13 @@ export class SitesService {
     const connectionToken = `wpcc_tok_${randomBytes(16).toString('hex')}`;
     const encKey = getAgentEncryptionKey();
     const connectionTokenEncrypted = encrypt(connectionToken, encKey);
+    const connectionTokenHash = hashConnectionToken(connectionToken, encKey);
 
     await this.prisma.siteCredential.update({
       where: { siteId: id },
       data: {
         connectionTokenEncrypted,
+        connectionTokenHash,
       },
     });
 
@@ -190,8 +195,9 @@ export class SitesService {
 
     // Call WordPress Agent
     const targetUrl = `${site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/sync-inventory`;
-    
+
     try {
+      await assertPublicUrl(targetUrl); // SSRF guard
       const response = await fetch(targetUrl, {
         method,
         headers: {
@@ -207,11 +213,46 @@ export class SitesService {
       }
 
       const responseBody = await response.json() as any;
+      if (!responseBody || typeof responseBody !== 'object') {
+        throw new Error('Invalid agent response: not an object');
+      }
       if (!responseBody.success || !responseBody.data) {
         throw new Error(responseBody.message || 'Agent sync failed');
       }
 
       const { systemInfo, plugins, themes, core } = responseBody.data;
+
+      // Validate schema strictly to prevent malformed data from corrupting DB
+      if (!systemInfo || typeof systemInfo !== 'object') {
+        throw new Error('Invalid agent response: systemInfo is missing or not an object');
+      }
+      if (typeof systemInfo.wpVersion !== 'string' ||
+          typeof systemInfo.phpVersion !== 'string' ||
+          typeof systemInfo.wpAgentVersion !== 'string') {
+        throw new Error('Invalid agent response: systemInfo fields must be strings');
+      }
+      if (!Array.isArray(plugins)) {
+        throw new Error('Invalid agent response: plugins must be an array');
+      }
+      if (!Array.isArray(themes)) {
+        throw new Error('Invalid agent response: themes must be an array');
+      }
+      if (!core || typeof core !== 'object') {
+        throw new Error('Invalid agent response: core is missing or not an object');
+      }
+
+      // Validate each plugin entry has required fields
+      for (const p of plugins) {
+        if (!p || typeof p.slug !== 'string' || typeof p.name !== 'string') {
+          throw new Error('Invalid agent response: plugin entry missing slug/name');
+        }
+      }
+      // Validate each theme entry has required fields
+      for (const t of themes) {
+        if (!t || typeof t.slug !== 'string' || typeof t.name !== 'string') {
+          throw new Error('Invalid agent response: theme entry missing slug/name');
+        }
+      }
 
       // Update Site Table
       await this.prisma.site.update({
@@ -421,6 +462,20 @@ export class SitesService {
           throw new BadRequestException('Maintenance status (enabled) is required');
         }
         break;
+      case 'object-cache-status':
+        jobType = JobType.TOGGLE_OBJECT_CACHE;
+        targetType = JobTargetType.OBJECT_CACHE;
+        break;
+      case 'object-cache-enable':
+        jobType = JobType.TOGGLE_OBJECT_CACHE;
+        targetType = JobTargetType.OBJECT_CACHE;
+        if (body.enabled === undefined) body.enabled = true;
+        break;
+      case 'object-cache-disable':
+        jobType = JobType.TOGGLE_OBJECT_CACHE;
+        targetType = JobTargetType.OBJECT_CACHE;
+        if (body.enabled === undefined) body.enabled = false;
+        break;
       case 'install-plugin':
         jobType = JobType.INSTALL_PLUGIN;
         targetType = JobTargetType.PLUGIN;
@@ -487,5 +542,19 @@ export class SitesService {
       jobId: job.id,
       status: job.status,
     };
+  }
+
+  async attachIntegration(siteId: string, provider: IntegrationProvider, integrationAccountId: string, externalPropertyId?: string) {
+    const site = await this.prisma.site.findUnique({ where: { id: siteId } });
+    if (!site) throw new NotFoundException('Site not found');
+
+    const account = await this.prisma.integrationAccount.findUnique({ where: { id: integrationAccountId } });
+    if (!account) throw new NotFoundException('Integration account not found');
+
+    return this.prisma.siteIntegration.upsert({
+      where: { siteId_provider: { siteId, provider } },
+      update: { integrationAccountId, externalPropertyId, status: IntegrationStatus.ACTIVE },
+      create: { siteId, provider, integrationAccountId, externalPropertyId, status: IntegrationStatus.ACTIVE },
+    });
   }
 }

@@ -3,12 +3,18 @@ import { PrismaService } from '../database/prisma.service';
 import { encrypt, decrypt } from '../../common/utils/crypto.utils';
 import { IntegrationProvider, IntegrationStatus } from '@wpcc/database';
 import { getAgentEncryptionKey } from '../../config/env';
+import { createStateToken, verifyStateToken } from './oauth-state.util';
 
 @Injectable()
 export class IntegrationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  getGoogleAuthUrl(): string {
+  /**
+   * Build the Google OAuth authorization URL including a signed `state`
+   * token to bind the callback to this server (CSRF / auth-code injection).
+   * The state token is also returned so callers can persist/forward it.
+   */
+  getGoogleAuthUrl(): { authorizationUrl: string; state: string } {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const redirectUri = process.env.GOOGLE_REDIRECT_URI;
     if (!clientId || !redirectUri) {
@@ -21,6 +27,8 @@ export class IntegrationsService {
       'https://www.googleapis.com/auth/userinfo.email',
     ];
 
+    const state = createStateToken();
+
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     url.searchParams.set('client_id', clientId);
     url.searchParams.set('redirect_uri', redirectUri);
@@ -28,11 +36,16 @@ export class IntegrationsService {
     url.searchParams.set('scope', scopes.join(' '));
     url.searchParams.set('access_type', 'offline');
     url.searchParams.set('prompt', 'consent'); // Force refresh token on reconnect
+    url.searchParams.set('state', state); // CSRF protection
 
-    return url.toString();
+    return { authorizationUrl: url.toString(), state };
   }
 
-  async handleGoogleCallback(code: string) {
+  async handleGoogleCallback(code: string, state?: string, userId?: string) {
+    // Verify the signed state token before doing anything else. This binds the
+    // authorization code to a flow that *this server* initiated.
+    verifyStateToken(state);
+
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     const redirectUri = process.env.GOOGLE_REDIRECT_URI;
@@ -85,15 +98,19 @@ export class IntegrationsService {
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
     // 3. Upsert Integration Account
-    // We update by provider and accountEmail if available, or just create a new one
+    // Key by provider + ownerId so each admin has their own integration
+    // account bound to them. If userId is absent (backward-compat), fall
+    // back to matching by provider + accountEmail.
     let account;
-    if (accountEmail) {
-      account = await this.prisma.integrationAccount.findFirst({
-        where: {
-          provider: IntegrationProvider.GOOGLE,
-          accountEmail,
-        },
-      });
+    const lookupWhere: Record<string, unknown> = { provider: IntegrationProvider.GOOGLE };
+    if (userId) {
+      lookupWhere.ownerId = userId;
+    } else if (accountEmail) {
+      lookupWhere.accountEmail = accountEmail;
+    }
+
+    if (Object.keys(lookupWhere).length > 1) {
+      account = await this.prisma.integrationAccount.findFirst({ where: lookupWhere as any });
     }
 
     if (account) {
@@ -104,6 +121,7 @@ export class IntegrationsService {
           ...(refreshTokenEncrypted ? { refreshTokenEncrypted } : {}),
           expiresAt,
           status: IntegrationStatus.ACTIVE,
+          ...(userId ? { ownerId: userId } : {}),
         },
       });
     } else {
@@ -115,6 +133,7 @@ export class IntegrationsService {
           refreshTokenEncrypted: refreshTokenEncrypted || '',
           expiresAt,
           status: IntegrationStatus.ACTIVE,
+          ...(userId ? { ownerId: userId } : {}),
         },
       });
     }
