@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -23,7 +22,6 @@ interface Site {
 type ViewMode = "grid" | "list";
 
 export default function SitesPage() {
-  const router = useRouter();
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -90,7 +88,6 @@ export default function SitesPage() {
 
   useEffect(() => {
     Promise.resolve().then(() => fetchSites());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredSites = sites.filter((s) =>

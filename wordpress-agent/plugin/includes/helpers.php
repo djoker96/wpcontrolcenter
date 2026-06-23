@@ -83,6 +83,62 @@ function wpcc_agent_safe_extract_zip(string $zip_path, string $dest): bool {
 }
 
 /**
+ * Split a SQL dump into individual statements, respecting single-quoted string
+ * literals (with '' and \' escapes) and backtick identifiers, so a `;` or
+ * newline *inside* a value never splits a statement mid-literal. Replaces the
+ * fragile explode(";\n") which could break/inject on crafted data.
+ *
+ * @return string[] trimmed non-empty statements.
+ */
+function wpcc_agent_split_sql(string $sql): array {
+    $statements = [];
+    $buf = '';
+    $len = strlen($sql);
+    $inSingle = false;   // inside '...'
+    $inBacktick = false; // inside `...`
+
+    for ($i = 0; $i < $len; $i++) {
+        $ch = $sql[$i];
+
+        if ($inSingle) {
+            $buf .= $ch;
+            if ($ch === '\\' && $i + 1 < $len) { // escaped char (e.g. \')
+                $buf .= $sql[++$i];
+            } elseif ($ch === "'") {
+                if ($i + 1 < $len && $sql[$i + 1] === "'") { // '' escape
+                    $buf .= $sql[++$i];
+                } else {
+                    $inSingle = false;
+                }
+            }
+            continue;
+        }
+
+        if ($inBacktick) {
+            $buf .= $ch;
+            if ($ch === '`') $inBacktick = false;
+            continue;
+        }
+
+        if ($ch === "'") { $inSingle = true; $buf .= $ch; continue; }
+        if ($ch === '`') { $inBacktick = true; $buf .= $ch; continue; }
+
+        if ($ch === ';') {
+            $stmt = trim($buf);
+            if ($stmt !== '') $statements[] = $stmt;
+            $buf = '';
+            continue;
+        }
+
+        $buf .= $ch;
+    }
+
+    $stmt = trim($buf);
+    if ($stmt !== '') $statements[] = $stmt;
+    return $statements;
+}
+
+/**
  * Lexically normalize a path (resolve ./ and ../) without touching the filesystem.
  */
 function wpcc_agent_normalize_path(string $path): string {

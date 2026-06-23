@@ -82,21 +82,23 @@ class WPCC_Agent_Backup_Manager {
             } elseif (strpos($filename, 'files-backup') !== false) {
                 $this->restore_files($filepath);
             } elseif (strpos($filename, 'full-backup') !== false) {
-                // Extract full zip (Zip-Slip safe)
-                if (wpcc_agent_safe_extract_zip($filepath, $this->backup_dir)) {
-                    // Look for extracted items
-                    $pattern = $this->backup_dir . '/*';
-                    foreach (glob($pattern) as $file) {
+                // Extract into a unique temp subdir (Zip-Slip safe) so the restore
+                // loop only touches THIS archive's contents, not stale backups.
+                $tmp_dir = $this->backup_dir . '/.restore-' . uniqid('', true);
+                wp_mkdir_p($tmp_dir);
+                try {
+                    wpcc_agent_safe_extract_zip($filepath, $tmp_dir);
+                    foreach (glob($tmp_dir . '/*') as $file) {
                         if (strpos($file, 'db-backup') !== false) {
                             $this->restore_db($file);
-                            @unlink($file);
                         } elseif (strpos($file, 'files-backup') !== false) {
                             $this->restore_files($file);
-                            @unlink($file);
                         }
                     }
-                } else {
-                    throw new Exception('Failed to extract full ZIP backup.');
+                } finally {
+                    // Clean up extracted artifacts regardless of outcome.
+                    foreach (glob($tmp_dir . '/*') as $file) { @unlink($file); }
+                    @rmdir($tmp_dir);
                 }
             }
             return ['success' => true, 'message' => 'Restore completed successfully.'];
@@ -141,14 +143,15 @@ class WPCC_Agent_Backup_Manager {
         if ($queries === false) {
             throw new Exception('Cannot read database backup SQL file');
         }
-        // Basic SQL parser for executing multiple statements (split by semicolon)
-        // We need to handle cases where semicolons exist inside quotes, but for basic dump it's usually safe
-        $queries = explode(";\n", $queries);
-        foreach ($queries as $query) {
-            $query = trim($query);
-            if (!empty($query)) {
-                $wpdb->query($query);
-            }
+        // Reject dumps carrying executable/web-shell payloads — a .sql restore
+        // should never contain PHP tags or NUL bytes.
+        if (strpos($queries, '<?php') !== false || strpos($queries, '<?=') !== false || strpos($queries, "\0") !== false) {
+            throw new Exception('Backup SQL file failed content validation.');
+        }
+        // Quote-aware split so semicolons/newlines inside values cannot break or
+        // inject statements (see wpcc_agent_split_sql).
+        foreach (wpcc_agent_split_sql($queries) as $query) {
+            $wpdb->query($query);
         }
     }
 

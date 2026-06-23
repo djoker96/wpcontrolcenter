@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { API_URL } from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -69,7 +70,7 @@ export function BulkUploadForm() {
 
   /* Load sites on mount */
   useEffect(() => {
-    fetch("/api/sites", { credentials: "include" })
+    fetch(`${API_URL}/sites`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { data: [] }))
       .then((res) => {
         const list: Site[] = res.data ?? (Array.isArray(res) ? res : []);
@@ -139,7 +140,7 @@ export function BulkUploadForm() {
     fd.append("slug", selectedItem.slug);
 
     try {
-      const res = await fetch("/api/uploads/bulk", { method: "POST", credentials: "include", body: fd });
+      const res = await fetch(`${API_URL}/uploads/bulk`, { method: "POST", credentials: "include", body: fd });
       const json = await res.json() as { success: boolean; jobs: { siteId: string; jobId: string }[] };
 
       const siteMap = new Map(sites.map((s) => [s.id, s.name]));

@@ -18,7 +18,11 @@ export class BackupsService {
     if (!/^[a-zA-Z0-9_-]+$/.test(siteId)) {
       throw new BadRequestException('Invalid site id');
     }
-    const root = path.resolve(__dirname, '../../../../storage/backups');
+    // Single source of truth shared with the worker (set WPCC_BACKUPS_DIR in deploy
+    // so API reads from exactly where the worker writes).
+    const root = process.env.WPCC_BACKUPS_DIR
+      ? path.resolve(process.env.WPCC_BACKUPS_DIR)
+      : path.resolve(__dirname, '../../../../storage/backups');
     const filePath = path.resolve(root, siteId, path.basename(filename));
     if (!filePath.startsWith(root + path.sep)) {
       throw new BadRequestException('Resolved backup path escapes storage root');

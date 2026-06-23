@@ -396,6 +396,11 @@ class WPCC_Agent_API {
             return new WP_REST_Response(['success' => false, 'message' => 'Uploaded file is not a valid ZIP archive.'], 400);
         }
 
+        // A .sql must not carry executable payloads (PHP tags / NUL bytes).
+        if ($ext === 'sql' && (strpos($body, '<?php') !== false || strpos($body, '<?=') !== false || strpos($body, "\0") !== false)) {
+            return new WP_REST_Response(['success' => false, 'message' => 'Uploaded SQL file failed content validation.'], 400);
+        }
+
         $backup_dir = WP_CONTENT_DIR . '/wpcc-backups';
         if (!file_exists($backup_dir)) {
             wp_mkdir_p($backup_dir);

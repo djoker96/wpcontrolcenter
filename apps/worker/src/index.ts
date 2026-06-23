@@ -310,7 +310,10 @@ async function handleCreateBackupJob(jobId: string) {
       throw new Error(`Failed to download backup: HTTP ${fileRes.status}`);
     }
 
-    const storageDir = path.resolve(__dirname, '../../storage/backups', job.siteId);
+    const backupsRoot = process.env.WPCC_BACKUPS_DIR
+      ? path.resolve(process.env.WPCC_BACKUPS_DIR)
+      : path.resolve(__dirname, '../../storage/backups');
+    const storageDir = path.join(backupsRoot, job.siteId);
     if (!fs.existsSync(storageDir)) {
       fs.mkdirSync(storageDir, { recursive: true });
     }

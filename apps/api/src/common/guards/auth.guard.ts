@@ -10,7 +10,13 @@ export class AuthGuard implements CanActivate {
     for (const part of cookieHeader.split(';')) {
       const [name, ...rest] = part.trim().split('=');
       if (name === 'wpcc_token') {
-        return decodeURIComponent(rest.join('='));
+        const raw = rest.join('=');
+        try {
+          return decodeURIComponent(raw);
+        } catch {
+          // Malformed percent-encoding → treat as no cookie (→ 401, not 500).
+          return raw || undefined;
+        }
       }
     }
     return undefined;

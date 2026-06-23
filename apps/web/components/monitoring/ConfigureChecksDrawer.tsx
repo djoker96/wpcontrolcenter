@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { API_URL } from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -71,7 +72,7 @@ export function ConfigureChecksDrawer({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     Promise.resolve().then(() => setSaved(false));
-    fetch("/api/sites", { credentials: "include" })
+    fetch(`${API_URL}/sites`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { data: [] }))
       .then((res) => {
         const list: Site[] =
