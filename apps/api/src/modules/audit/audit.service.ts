@@ -14,10 +14,12 @@ export class AuditService {
     const where: { siteId?: string; action?: string } = {};
     if (opts.siteId) where.siteId = opts.siteId;
     if (opts.action) where.action = opts.action;
+    const requested = Number.isFinite(opts.take) ? (opts.take as number) : 50;
+    const take = Math.min(Math.max(1, Math.floor(requested)), 200);
     return this.prisma.auditLog.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: Math.min(opts.take ?? 50, 200),
+      take,
       include: {
         user: { select: { id: true, email: true, fullName: true } },
         site: { select: { id: true, name: true, domain: true } },
