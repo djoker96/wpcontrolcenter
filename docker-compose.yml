@@ -18,8 +18,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: wpcc-redis
-    # Bind to loopback only. For any shared/prod host also enable auth:
-    #   command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-}"]
+    # If REDIS_PASSWORD is empty/unset, Redis starts without auth (safe for
+    # local-only dev). In production set a strong password.
+    # Bind to loopback only:
     ports:
       - "127.0.0.1:6380:6379"
     volumes:

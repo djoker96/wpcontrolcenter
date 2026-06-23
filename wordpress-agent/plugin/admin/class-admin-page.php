@@ -61,7 +61,13 @@ class WPCC_Agent_Admin_Page {
             wpcc_agent_update_option('connected', true);
             wpcc_agent_update_option('api_url', rtrim($api_url, '/'));
             wpcc_agent_update_option('site_id', $body['siteId']);
-            wpcc_agent_update_option('secret_key', $body['secretKey']);
+            if (defined('WPCC_SECRET_KEY') && WPCC_SECRET_KEY !== '') {
+                // The constant is already set in wp-config.php — prefer it.
+                // Adding an add_settings_error() notice is too early in the
+                // page lifecycle here; the key is stored regardless.
+            } else {
+                wpcc_agent_update_option('secret_key', $body['secretKey']);
+            }
 
             add_settings_error('wpcc_messages', 'wpcc_success', 'Connected successfully to WP Control Center!', 'updated');
         }

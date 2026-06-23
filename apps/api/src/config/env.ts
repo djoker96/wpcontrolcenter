@@ -70,6 +70,11 @@ export function validateEnvironment(): void {
         '[security] JWT_SECRET is shorter than 32 characters in production.',
       );
     }
+    if (!process.env.REDIS_PASSWORD) {
+      console.warn(
+        '[security] REDIS_PASSWORD is not set in production; the BullMQ queue connects to Redis without authentication.',
+      );
+    }
   }
 }
 

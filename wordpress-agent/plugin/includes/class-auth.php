@@ -21,7 +21,7 @@ class WPCC_Agent_Auth {
             return false;
         }
 
-        $secret_key = wpcc_agent_get_option('secret_key');
+        $secret_key = wpcc_agent_get_secret_key();
         if (empty($secret_key)) {
             return false;
         }

@@ -1,11 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, ParseEnumPipe, UseGuards } from '@nestjs/common';
 import { SitesService } from './sites.service';
 import { CreateSiteDto } from './dto/create-site.dto';
 import { UpdateSiteDto } from './dto/update-site.dto';
+import { AttachIntegrationDto } from './dto/attach-integration.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from '@wpcc/database';
+import { UserRole, IntegrationProvider } from '@wpcc/database';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @Controller('sites')
@@ -196,7 +197,11 @@ export class SitesController {
 
   @Post(':id/integrations/:provider')
   @Roles(UserRole.ADMIN)
-  attachIntegration(@Param('id') id: string, @Param('provider') provider: string, @Body() body: Record<string, unknown>) {
-    return { siteId: id, provider, ...body };
+  async attachIntegration(
+    @Param('id') id: string,
+    @Param('provider', new ParseEnumPipe(IntegrationProvider)) provider: IntegrationProvider,
+    @Body() body: AttachIntegrationDto,
+  ) {
+    return this.sitesService.attachIntegration(id, provider, body.integrationAccountId, body.externalPropertyId);
   }
 }

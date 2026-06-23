@@ -446,6 +446,13 @@ async function handleRestoreBackupJob(jobId: string) {
 
 const redisHost = process.env.REDIS_HOST || 'localhost';
 const redisPort = process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6379;
+// REDIS_PASSWORD is optional in dev but should be set in prod (see docker-compose).
+const redisPassword = process.env.REDIS_PASSWORD || undefined;
+const redisConnection = {
+  host: redisHost,
+  port: redisPort,
+  ...(redisPassword ? { password: redisPassword } : {}),
+};
 
 const worker = new Worker(
   'jobs',
@@ -688,10 +695,7 @@ const worker = new Worker(
     }
   },
   {
-    connection: {
-      host: redisHost,
-      port: redisPort,
-    },
+    connection: redisConnection,
     // Worker-level options for detecting and retrying hung jobs
     stalledInterval: 30_000,       // Check every 30s for stalled jobs
     maxStalledCount: 1,           // Retry once if stalled, then fail

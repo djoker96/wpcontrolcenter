@@ -8,8 +8,13 @@ class WPCC_Agent_Backup_Manager {
         $this->backup_dir = WP_CONTENT_DIR . '/wpcc-backups';
         if (!file_exists($this->backup_dir)) {
             wp_mkdir_p($this->backup_dir);
-            // Write htaccess to deny public web access for safety
-            file_put_contents($this->backup_dir . '/.htaccess', "Deny from all\n");
+            // Defense-in-depth: prevent public web access across server stacks.
+            // Apache 2.4 + 2.2 compat .htaccess
+            file_put_contents($this->backup_dir . '/.htaccess', "# Apache 2.4\nRequire all denied\n# Apache 2.2 compat\nDeny from all\n");
+            // nginx ignores .htaccess; silent index.html blocks directory listing
+            file_put_contents($this->backup_dir . '/index.html', '');
+            // IIS hiddenSegments (web.config)
+            file_put_contents($this->backup_dir . '/web.config', '<?xml version="1.0"?><configuration><system.webServer><security><requestFiltering><hiddenSegments><add segment="wpcc-backups"/></hiddenSegments></requestFiltering></security></system.webServer></configuration>');
             file_put_contents($this->backup_dir . '/index.php', "<?php\n// Silence\n");
         }
     }

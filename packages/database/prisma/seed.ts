@@ -79,7 +79,13 @@ async function main(): Promise<void> {
     },
   });
 
-  const googleAccount = await prisma.integrationAccount.create({
+  const isProd = process.env.NODE_ENV === 'production';
+
+  if (isProd) {
+    console.log(`Seed completed. Admin: ${admin.email}. Production mode: skipping demo data.`);
+  } else {
+    // ── Demo data (dev / CI only) ──────────────────────────
+    const googleAccount = await prisma.integrationAccount.create({
     data: {
       provider: IntegrationProvider.GOOGLE,
       accountEmail: 'analytics@example.com',
@@ -311,9 +317,11 @@ async function main(): Promise<void> {
       phpIniContent: 'memory_limit=256M',
       createdByUserId: admin.id,
     },
-  });
+    }); // end maintenance snapshot — last demo data item
 
-  console.log(`Seed completed. Admin: ${admin.email}, Site: ${site.domain}`);
+    console.log(`Seed completed. Admin: ${admin.email}, Site: ${site.domain}`);
+  } // end if (!isProd)
+
   if (seededAdminPassword?.generated) {
     console.log('');
     console.log('========================================================');

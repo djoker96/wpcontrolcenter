@@ -5,7 +5,7 @@ import { UpdateSiteDto } from './dto/update-site.dto';
 import { encrypt, decrypt, hashConnectionToken } from '../../common/utils/crypto.utils';
 import { randomBytes, createHmac } from 'node:crypto';
 import { Queue } from 'bullmq';
-import { JobType, JobTargetType } from '@wpcc/database';
+import { JobType, JobTargetType, IntegrationProvider, IntegrationStatus } from '@wpcc/database';
 import { getAgentEncryptionKey } from '../../config/env';
 import { assertPublicUrl } from '@wpcc/shared';
 
@@ -542,5 +542,19 @@ export class SitesService {
       jobId: job.id,
       status: job.status,
     };
+  }
+
+  async attachIntegration(siteId: string, provider: IntegrationProvider, integrationAccountId: string, externalPropertyId?: string) {
+    const site = await this.prisma.site.findUnique({ where: { id: siteId } });
+    if (!site) throw new NotFoundException('Site not found');
+
+    const account = await this.prisma.integrationAccount.findUnique({ where: { id: integrationAccountId } });
+    if (!account) throw new NotFoundException('Integration account not found');
+
+    return this.prisma.siteIntegration.upsert({
+      where: { siteId_provider: { siteId, provider } },
+      update: { integrationAccountId, externalPropertyId, status: IntegrationStatus.ACTIVE },
+      create: { siteId, provider, integrationAccountId, externalPropertyId, status: IntegrationStatus.ACTIVE },
+    });
   }
 }

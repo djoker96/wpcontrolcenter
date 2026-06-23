@@ -8,7 +8,28 @@ function wpcc_agent_get_option($key, $default = null) {
 }
 
 function wpcc_agent_update_option($key, $value) {
-    return update_option('wpcc_agent_' . $key, $value);
+    // Disable autoload for secrets: load only when explicitly requested.
+    $autoload = $key === 'secret_key' ? false : null;
+    return update_option('wpcc_agent_' . $key, $value, $autoload);
+}
+
+/**
+ * Retrieve the HMAC secret key used for agent↔control-plane authentication.
+ *
+ * Precedence:
+ *   1. `WPCC_SECRET_KEY` constant (defined in wp-config.php) — strongly
+ *      preferred; keeps the key outside the database.
+ *   2. `wpcc_agent_secret_key` option (wp_options table, legacy).
+ *
+ * Always store the key in wp-config.php for production; the DB path is
+ * retained for backward compatibility with existing installations.
+ */
+function wpcc_agent_get_secret_key(): string {
+    if (defined('WPCC_SECRET_KEY') && WPCC_SECRET_KEY !== '') {
+        return WPCC_SECRET_KEY;
+    }
+    $value = get_option('wpcc_agent_secret_key', '');
+    return is_string($value) ? $value : '';
 }
 
 /**

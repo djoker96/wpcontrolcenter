@@ -19,16 +19,16 @@ export class IntegrationsController {
 
   @Post('google/connect')
   connectGoogle() {
-    const authorizationUrl = this.integrationsService.getGoogleAuthUrl();
-    return { authorizationUrl };
+    const { authorizationUrl, state } = this.integrationsService.getGoogleAuthUrl();
+    return { authorizationUrl, state };
   }
 
   @Post('google/callback')
-  async callback(@Body() body: { code: string }) {
+  async callback(@Body() body: { code: string; state?: string }) {
     if (!body.code) {
       return { success: false, error: 'Auth code is required' };
     }
-    const result = await this.integrationsService.handleGoogleCallback(body.code);
+    const result = await this.integrationsService.handleGoogleCallback(body.code, body.state);
     return result;
   }
 
