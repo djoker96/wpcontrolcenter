@@ -12,7 +12,12 @@ class WPCC_Agent_Admin_Page {
     }
 
     public function handle_actions() {
-        if (!isset($_POST['wpcc_nonce']) || !wp_verify_nonce($_POST['wpcc_nonce'], 'wpcc_agent_action')) {
+        // Capability check is required in addition to the nonce — a nonce proves
+        // intent/origin, not authorization.
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        if (!isset($_POST['wpcc_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['wpcc_nonce'])), 'wpcc_agent_action')) {
             return;
         }
 

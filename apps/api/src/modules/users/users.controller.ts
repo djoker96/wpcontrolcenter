@@ -5,6 +5,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '@wpcc/database';
 
 @Controller('users')
@@ -27,14 +28,18 @@ export class UsersController {
 
   @Post()
   @Roles(UserRole.ADMIN)
-  async create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  async create(@Body() createUserDto: CreateUserDto, @CurrentUser() actor: any) {
+    return this.usersService.create(createUserDto, actor.role);
   }
 
   @Patch(':id')
   @Roles(UserRole.ADMIN)
-  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+  async update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @CurrentUser() actor: any,
+  ) {
+    return this.usersService.update(id, updateUserDto, actor.role, actor.id);
   }
 
   @Delete(':id')
