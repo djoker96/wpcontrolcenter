@@ -123,19 +123,23 @@ jobs:
 
       - name: Generate CI environment file
         run: |
-          cat > ${{ env.COMPOSE_ENV }} <<'EOF'
+          # Throwaway secrets generated per run — never reuse production-shaped keys.
+          CI_JWT_SECRET="$(openssl rand -hex 32)"
+          CI_AGENT_KEY="$(openssl rand -hex 32)"
+          cat > "${COMPOSE_ENV}" <<EOF
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=ci_test_password
           POSTGRES_DB=wp_control_center
           DATABASE_URL=postgresql://postgres:ci_test_password@postgres:5432/wp_control_center?schema=public
           REDIS_HOST=redis
           REDIS_PORT=6379
-          JWT_SECRET=ci-jwt-secret-for-testing-only
+          JWT_SECRET=${CI_JWT_SECRET}
           JWT_EXPIRES_IN=1d
-          AGENT_ENCRYPTION_KEY=6a66632c253d82a17cb0b51de38e8cb554c8651a24d852a35368a5436d4f9bf3
+          AGENT_ENCRYPTION_KEY=${CI_AGENT_KEY}
           UPTIME_CHECK_INTERVAL_SECONDS=300
           EOF
-          sed -i 's/^[[:space:]]*//' ${{ env.COMPOSE_ENV }}
+        env:
+          COMPOSE_ENV: ${{ env.COMPOSE_ENV }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

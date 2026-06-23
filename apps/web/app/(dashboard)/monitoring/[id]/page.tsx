@@ -112,9 +112,6 @@ export default function SiteMonitoringPage({ params }: { params: Promise<{ id: s
   const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d">("24h");
 
   useEffect(() => {
-    const token = localStorage.getItem("wpcc_token");
-    if (!token) { router.push("/"); return; }
-
     async function fetchData() {
       try {
         const [siteData] = await Promise.all([

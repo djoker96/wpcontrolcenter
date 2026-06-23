@@ -39,12 +39,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("wpcc_token");
-    if (!token) {
-      router.push("/");
-      return;
-    }
-
+    // Auth is enforced by the dashboard layout (server-verified cookie session).
     async function fetchData() {
       try {
         const [monData, sitesData, auditData] = await Promise.all([

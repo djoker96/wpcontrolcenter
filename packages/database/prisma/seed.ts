@@ -1,5 +1,5 @@
 import { PrismaClient, UserRole, EnvironmentType, ConnectionStatus, SiteStatus, JobStatus, JobType, JobTargetType, IncidentSeverity, IncidentStatus, IncidentType, NotificationChannelType, AnalyticsSource, AuditResult, LogLevel, IntegrationProvider, IntegrationStatus } from '@prisma/client';
-import { scryptSync, createCipheriv, randomBytes } from 'node:crypto';
+import { scryptSync, createCipheriv, createHmac, randomBytes } from 'node:crypto';
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
 
@@ -33,6 +33,10 @@ const encKey = getRequiredEnv('AGENT_ENCRYPTION_KEY');
 
 function encryptValue(value: string): string {
   return encrypt(value, encKey);
+}
+
+function hashConnectionToken(token: string): string {
+  return createHmac('sha256', encKey).update(token).digest('hex');
 }
 
 function hashPassword(password: string): string {
@@ -111,6 +115,7 @@ async function main(): Promise<void> {
           publicKey: 'demo-public-key',
           secretKeyEncrypted: encryptValue('demo-secret-key'),
           connectionTokenEncrypted: encryptValue('demo-connection-token'),
+          connectionTokenHash: hashConnectionToken('demo-connection-token'),
           lastRotatedAt: new Date(),
         },
       },

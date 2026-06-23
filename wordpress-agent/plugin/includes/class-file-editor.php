@@ -30,7 +30,35 @@ class WPCC_Agent_File_Editor {
         return ['success' => true, 'message' => 'robots.txt updated successfully.'];
     }
 
+    /**
+     * Directives that can lead to code execution or hardening bypass when written
+     * to .htaccess. Blocked regardless of context.
+     */
+    private const HTACCESS_BLOCKED = [
+        'php_value', 'php_admin_value', 'php_flag', 'php_admin_flag',
+        'sethandler', 'addhandler', 'addtype', 'action',
+        'auto_prepend_file', 'auto_append_file',
+    ];
+
+    /**
+     * Whitelist of ini keys allowed in .user.ini. Anything else (e.g.
+     * auto_prepend_file, disable_functions) is rejected.
+     */
+    private const USER_INI_ALLOWED = [
+        'memory_limit', 'upload_max_filesize', 'post_max_size',
+        'max_execution_time', 'max_input_time', 'max_input_vars',
+        'max_file_uploads', 'default_charset',
+    ];
+
     public function update_htaccess(string $content): array {
+        // Reject content that tries to (re)configure PHP execution or handlers.
+        $lower = strtolower($content);
+        foreach (self::HTACCESS_BLOCKED as $directive) {
+            if (preg_match('/(^|\s)' . preg_quote($directive, '/') . '\b/m', $lower)) {
+                return ['success' => false, 'error' => 'Blocked .htaccess directive: ' . $directive];
+            }
+        }
+
         $htaccess_file = ABSPATH . '.htaccess';
         $backup_file = ABSPATH . '.htaccess.bak';
 
@@ -57,7 +85,15 @@ class WPCC_Agent_File_Editor {
 
     public function update_php_config(array $settings): array {
         $user_ini_file = ABSPATH . '.user.ini';
-        
+
+        // Reject any key outside the safe whitelist (blocks auto_prepend_file,
+        // disable_functions, etc. which enable RCE / hardening bypass).
+        foreach (array_keys($settings) as $key) {
+            if (!in_array(strtolower(trim($key)), self::USER_INI_ALLOWED, true)) {
+                return ['success' => false, 'error' => 'Disallowed PHP ini key: ' . $key];
+            }
+        }
+
         $existing = [];
         if (file_exists($user_ini_file)) {
             $ini_content = file_get_contents($user_ini_file);

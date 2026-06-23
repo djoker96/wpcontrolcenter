@@ -24,6 +24,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { decrypt, encrypt } from '@wpcc/shared';
+import { createHmac } from 'node:crypto';
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
 
@@ -81,6 +82,10 @@ async function reencrypt(): Promise<Counter> {
         secretKeyEncrypted: encrypt(decryptedSecret, NEW_KEY),
         connectionTokenEncrypted: decryptedToken
           ? encrypt(decryptedToken, NEW_KEY)
+          : null,
+        // Hash is keyed by the encryption key — recompute under NEW_KEY.
+        connectionTokenHash: decryptedToken
+          ? createHmac('sha256', NEW_KEY!).update(decryptedToken).digest('hex')
           : null,
       },
     });

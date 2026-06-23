@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { BackupType, BackupStatus, JobType, JobTargetType } from '@wpcc/database';
 import { Queue } from 'bullmq';
@@ -11,6 +11,20 @@ export class BackupsService {
     private readonly prisma: PrismaService,
     @Inject('JOBS_QUEUE') private readonly jobsQueue: Queue,
   ) {}
+
+  /** Resolve a backup file path, validating siteId/filename and asserting the
+   *  result stays within the backups storage root (prevents path traversal). */
+  private resolveBackupPath(siteId: string, filename: string): string {
+    if (!/^[a-zA-Z0-9_-]+$/.test(siteId)) {
+      throw new BadRequestException('Invalid site id');
+    }
+    const root = path.resolve(__dirname, '../../../../storage/backups');
+    const filePath = path.resolve(root, siteId, path.basename(filename));
+    if (!filePath.startsWith(root + path.sep)) {
+      throw new BadRequestException('Resolved backup path escapes storage root');
+    }
+    return filePath;
+  }
 
   async getBackups(siteId: string) {
     const site = await this.prisma.site.findUnique({ where: { id: siteId } });
@@ -57,7 +71,8 @@ export class BackupsService {
   }
 
   async restoreBackupJob(siteId: string, backupId: string, userId: string) {
-    const backup = await this.prisma.siteBackup.findUnique({ where: { id: backupId } });
+    // Scope to siteId so a backup cannot be restored onto a different site (IDOR).
+    const backup = await this.prisma.siteBackup.findFirst({ where: { id: backupId, siteId } });
     if (!backup) throw new NotFoundException('Backup not found');
 
     const job = await this.prisma.job.create({
@@ -80,12 +95,11 @@ export class BackupsService {
   }
 
   async deleteBackup(siteId: string, backupId: string) {
-    const backup = await this.prisma.siteBackup.findUnique({ where: { id: backupId } });
+    const backup = await this.prisma.siteBackup.findFirst({ where: { id: backupId, siteId } });
     if (!backup) throw new NotFoundException('Backup not found');
 
     // Remove from disk
-    const storageDir = path.resolve(__dirname, '../../../../storage/backups', siteId);
-    const filePath = path.join(storageDir, backup.filename);
+    const filePath = this.resolveBackupPath(siteId, backup.filename);
     if (fs.existsSync(filePath)) {
       try {
         fs.unlinkSync(filePath);
@@ -99,11 +113,10 @@ export class BackupsService {
   }
 
   async getBackupFilePath(siteId: string, backupId: string) {
-    const backup = await this.prisma.siteBackup.findUnique({ where: { id: backupId } });
+    const backup = await this.prisma.siteBackup.findFirst({ where: { id: backupId, siteId } });
     if (!backup) throw new NotFoundException('Backup not found');
 
-    const storageDir = path.resolve(__dirname, '../../../../storage/backups', siteId);
-    const filePath = path.join(storageDir, backup.filename);
+    const filePath = this.resolveBackupPath(siteId, backup.filename);
     if (!fs.existsSync(filePath)) {
       throw new NotFoundException('Backup file not found on disk');
     }

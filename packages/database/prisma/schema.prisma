@@ -214,6 +214,7 @@ model SiteCredential {
   publicKey                String   @map("public_key")
   secretKeyEncrypted       String   @map("secret_key_encrypted")
   connectionTokenEncrypted String?  @map("connection_token_encrypted")
+  connectionTokenHash      String?  @unique @map("connection_token_hash")
   lastRotatedAt            DateTime? @map("last_rotated_at")
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")

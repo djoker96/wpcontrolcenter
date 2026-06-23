@@ -14,10 +14,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("wpcc_token");
-    if (token) {
-      router.push("/sites");
-    }
+    // Already authenticated? The httpOnly cookie is verified server-side.
+    fetch(`${API_URL}/auth/me`, { credentials: "include" })
+      .then((res) => {
+        if (res.ok) router.push("/sites");
+      })
+      .catch(() => {});
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,6 +33,7 @@ export default function LoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include", // accept the Set-Cookie session cookie
         body: JSON.stringify({ email, password }),
       });
 
@@ -39,9 +42,7 @@ export default function LoginPage() {
         throw new Error(data.message || "Invalid credentials");
       }
 
-      const data = await response.json();
-      localStorage.setItem("wpcc_token", data.accessToken);
-      localStorage.setItem("wpcc_user", JSON.stringify(data.user || { email }));
+      // Session is held in the httpOnly cookie — nothing to store client-side.
       router.push("/sites");
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Something went wrong. Please try again.";

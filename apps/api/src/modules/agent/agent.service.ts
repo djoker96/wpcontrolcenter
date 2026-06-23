@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../database/prisma.service';
-import { decrypt } from '../../common/utils/crypto.utils';
+import { decrypt, hashConnectionToken } from '../../common/utils/crypto.utils';
 import { ConnectionStatus } from '@wpcc/database';
 import { getAgentEncryptionKey } from '../../config/env';
 
@@ -15,31 +16,26 @@ export class AgentService {
 
     const encKey = getAgentEncryptionKey();
 
-    // Fetch credentials that are active (have connection token)
-    const credentialsList = await this.prisma.siteCredential.findMany({
-      where: {
-        connectionTokenEncrypted: {
-          not: null,
-        },
-      },
+    // O(1) indexed lookup by keyed hash — no decrypt-all loop (token oracle/DoS).
+    const tokenHash = hashConnectionToken(connectionToken, encKey);
+    const matchedCredential = await this.prisma.siteCredential.findUnique({
+      where: { connectionTokenHash: tokenHash },
     });
 
-    let matchedCredential = null;
-
-    for (const cred of credentialsList) {
-      if (!cred.connectionTokenEncrypted) continue;
-      try {
-        const decryptedToken = decrypt(cred.connectionTokenEncrypted, encKey);
-        if (decryptedToken === connectionToken) {
-          matchedCredential = cred;
-          break;
-        }
-      } catch (err) {
-        // Skip decryption failures
-      }
+    if (!matchedCredential || !matchedCredential.connectionTokenEncrypted) {
+      throw new UnauthorizedException('Invalid or expired connection token');
     }
 
-    if (!matchedCredential) {
+    // Constant-time confirm the decrypted token matches (defense in depth).
+    let decryptedToken: string;
+    try {
+      decryptedToken = decrypt(matchedCredential.connectionTokenEncrypted, encKey);
+    } catch {
+      throw new UnauthorizedException('Invalid or expired connection token');
+    }
+    const a = Buffer.from(decryptedToken);
+    const b = Buffer.from(connectionToken);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
       throw new UnauthorizedException('Invalid or expired connection token');
     }
 
@@ -62,6 +58,7 @@ export class AgentService {
         where: { siteId },
         data: {
           connectionTokenEncrypted: null,
+          connectionTokenHash: null,
         },
       }),
       this.prisma.auditLog.create({

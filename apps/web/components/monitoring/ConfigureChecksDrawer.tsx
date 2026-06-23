@@ -71,10 +71,7 @@ export function ConfigureChecksDrawer({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     Promise.resolve().then(() => setSaved(false));
-    const token = localStorage.getItem("wpcc_token");
-    fetch("/api/sites", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    fetch("/api/sites", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { data: [] }))
       .then((res) => {
         const list: Site[] =

@@ -15,3 +15,4 @@ export interface HeartbeatResponse {
 }
 
 export { decrypt, encrypt } from './crypto';
+export { assertPublicUrl, isPrivateIp } from './ssrf';

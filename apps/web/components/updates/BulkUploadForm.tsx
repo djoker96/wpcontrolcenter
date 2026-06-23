@@ -69,10 +69,7 @@ export function BulkUploadForm() {
 
   /* Load sites on mount */
   useEffect(() => {
-    const token = localStorage.getItem("wpcc_token");
-    fetch("/api/sites", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    fetch("/api/sites", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { data: [] }))
       .then((res) => {
         const list: Site[] = res.data ?? (Array.isArray(res) ? res : []);
@@ -142,11 +139,7 @@ export function BulkUploadForm() {
     fd.append("slug", selectedItem.slug);
 
     try {
-      const token = localStorage.getItem("wpcc_token");
-      const headers: Record<string, string> = {};
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-
-      const res = await fetch("/api/uploads/bulk", { method: "POST", headers, body: fd });
+      const res = await fetch("/api/uploads/bulk", { method: "POST", credentials: "include", body: fd });
       const json = await res.json() as { success: boolean; jobs: { siteId: string; jobId: string }[] };
 
       const siteMap = new Map(sites.map((s) => [s.id, s.name]));

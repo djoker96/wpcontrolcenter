@@ -21,21 +21,15 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+// Auth is carried by an httpOnly cookie (set by the API on login). The cookie is
+// sent automatically with credentials:"include"; the JWT is never exposed to JS,
+// so XSS cannot exfiltrate it.
 function getHeaders(): HeadersInit {
-  const token = typeof window !== "undefined" ? localStorage.getItem("wpcc_token") : null;
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-  };
-  if (token) {
-    (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
-  }
-  return headers;
+  return { "Content-Type": "application/json" };
 }
 
 function checkAuth(response: Response): void {
   if (response.status === 401 && typeof window !== "undefined") {
-    localStorage.removeItem("wpcc_token");
-    localStorage.removeItem("wpcc_user");
     window.location.href = "/";
   }
 }
@@ -44,6 +38,7 @@ export const api = {
   async get<T>(path: string): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
       headers: getHeaders(),
+      credentials: "include",
     });
     checkAuth(response);
     return handleResponse<T>(response);
@@ -53,6 +48,7 @@ export const api = {
     const response = await fetch(`${API_URL}${path}`, {
       method: "POST",
       headers: getHeaders(),
+      credentials: "include",
       body: body ? JSON.stringify(body) : undefined,
     });
     checkAuth(response);
@@ -63,6 +59,7 @@ export const api = {
     const response = await fetch(`${API_URL}${path}`, {
       method: "PATCH",
       headers: getHeaders(),
+      credentials: "include",
       body: body ? JSON.stringify(body) : undefined,
     });
     checkAuth(response);
@@ -73,6 +70,7 @@ export const api = {
     const response = await fetch(`${API_URL}${path}`, {
       method: "DELETE",
       headers: getHeaders(),
+      credentials: "include",
     });
     checkAuth(response);
     return handleResponse<T>(response);
@@ -83,17 +81,13 @@ export const api = {
    * Sends FormData (no explicit Content-Type — browser sets multipart boundary).
    */
   async uploadFile<T>(path: string, file: File, slug?: string): Promise<T> {
-    const token = typeof window !== "undefined" ? localStorage.getItem("wpcc_token") : null;
     const fd = new FormData();
     fd.append("file", file);
     if (slug) fd.append("slug", slug);
 
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
     const response = await fetch(`${API_URL}${path}`, {
       method: "POST",
-      headers,
+      credentials: "include",
       body: fd,
     });
     checkAuth(response);

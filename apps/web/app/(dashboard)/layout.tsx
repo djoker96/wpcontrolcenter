@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { API_URL } from "@/lib/api";
 
 export default function DashboardLayout({
   children,
@@ -14,13 +15,17 @@ export default function DashboardLayout({
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("wpcc_token");
-    if (!token) {
-      router.push("/");
-    } else {
-        Promise.resolve().then(() => setAuthed(true));
-    }
-    Promise.resolve().then(() => setInitialized(true));
+    // Verify the session server-side via the httpOnly cookie.
+    fetch(`${API_URL}/auth/me`, { credentials: "include" })
+      .then((res) => {
+        if (res.ok) {
+          setAuthed(true);
+        } else {
+          router.push("/");
+        }
+      })
+      .catch(() => router.push("/"))
+      .finally(() => setInitialized(true));
   }, [router]);
 
   if (!initialized || !authed) {

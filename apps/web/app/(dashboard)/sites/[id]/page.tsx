@@ -127,9 +127,6 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   }>({ open: false });
 
   useEffect(() => {
-    const token = localStorage.getItem("wpcc_token");
-    if (!token) { router.push("/"); return; }
-
     async function fetchSite() {
       try {
         const data = await api.get<SiteData>(`/sites/${id}`);

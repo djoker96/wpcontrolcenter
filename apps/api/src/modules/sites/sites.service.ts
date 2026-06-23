@@ -2,11 +2,12 @@ import { Injectable, NotFoundException, BadRequestException, Inject } from '@nes
 import { PrismaService } from '../database/prisma.service';
 import { CreateSiteDto } from './dto/create-site.dto';
 import { UpdateSiteDto } from './dto/update-site.dto';
-import { encrypt, decrypt } from '../../common/utils/crypto.utils';
+import { encrypt, decrypt, hashConnectionToken } from '../../common/utils/crypto.utils';
 import { randomBytes, createHmac } from 'node:crypto';
 import { Queue } from 'bullmq';
 import { JobType, JobTargetType } from '@wpcc/database';
 import { getAgentEncryptionKey } from '../../config/env';
+import { assertPublicUrl } from '@wpcc/shared';
 
 @Injectable()
 export class SitesService {
@@ -22,6 +23,7 @@ export class SitesService {
 
     const encKey = getAgentEncryptionKey();
     const connectionTokenEncrypted = encrypt(connectionToken, encKey);
+    const connectionTokenHash = hashConnectionToken(connectionToken, encKey);
     const secretKeyEncrypted = encrypt(secretKey, encKey);
 
     const site = await this.prisma.site.create({
@@ -35,6 +37,7 @@ export class SitesService {
             publicKey,
             secretKeyEncrypted,
             connectionTokenEncrypted,
+            connectionTokenHash,
           },
         },
         setting: {
@@ -126,11 +129,13 @@ export class SitesService {
     const connectionToken = `wpcc_tok_${randomBytes(16).toString('hex')}`;
     const encKey = getAgentEncryptionKey();
     const connectionTokenEncrypted = encrypt(connectionToken, encKey);
+    const connectionTokenHash = hashConnectionToken(connectionToken, encKey);
 
     await this.prisma.siteCredential.update({
       where: { siteId: id },
       data: {
         connectionTokenEncrypted,
+        connectionTokenHash,
       },
     });
 
@@ -190,8 +195,9 @@ export class SitesService {
 
     // Call WordPress Agent
     const targetUrl = `${site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/sync-inventory`;
-    
+
     try {
+      await assertPublicUrl(targetUrl); // SSRF guard
       const response = await fetch(targetUrl, {
         method,
         headers: {

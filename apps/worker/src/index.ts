@@ -1,6 +1,6 @@
 import { Worker, Job as BullJob } from 'bullmq';
 import { PrismaClient, JobStatus, LogLevel, AuditResult, AnalyticsSource, NotificationChannelType, NotificationDeliveryStatus } from '@wpcc/database';
-import { decrypt, encrypt } from '@wpcc/shared';
+import { decrypt, encrypt, assertPublicUrl } from '@wpcc/shared';
 import { createHmac } from 'node:crypto';
 import { setInterval } from 'node:timers';
 import * as path from 'node:path';
@@ -27,6 +27,11 @@ async function fetchWithTimeout(
   init: RequestInit = {},
   timeoutMs = 30_000,
 ): Promise<Response> {
+  // SSRF guard: block private/loopback/link-local/metadata targets for every
+  // outbound request (WP sites + user-configured notification webhooks). Public
+  // hosts (incl. Google APIs) pass through.
+  await assertPublicUrl(url);
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -287,7 +292,9 @@ async function handleCreateBackupJob(jobId: string) {
     // Now download the backup file from Agent
     const downloadPath = `/wpcc/v1/execute/download-backup`;
     const downloadQuery = `?filename=${encodeURIComponent(filename)}`;
-    const downloadMsg = `GET|${downloadPath}|${timestamp}|`;
+    // Query string MUST be inside the signed message so the agent can authenticate
+    // the filename param (matches $_SERVER['QUERY_STRING'] on the agent side).
+    const downloadMsg = `GET|${downloadPath}${downloadQuery}|${timestamp}|`;
     const downloadSignature = createHmac('sha256', secretKey).update(downloadMsg).digest('hex');
     const downloadTarget = `${job.site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/download-backup${downloadQuery}`;
 
@@ -379,9 +386,10 @@ async function handleRestoreBackupJob(jobId: string) {
     const fileData = fs.readFileSync(filePath);
     const uploadPath = '/wpcc/v1/execute/upload-backup';
     const uploadQuery = `?filename=${encodeURIComponent(backup.filename)}`;
-    // For binary body, hash/HMAC is calculated over raw bytes
+    // For binary body, hash/HMAC is calculated over raw bytes. Query string is
+    // included so the agent can authenticate the filename param.
     const messageBytes = Buffer.concat([
-      Buffer.from(`POST|${uploadPath}|${timestamp}|`),
+      Buffer.from(`POST|${uploadPath}${uploadQuery}|${timestamp}|`),
       fileData
     ]);
     const uploadSignature = createHmac('sha256', secretKey).update(messageBytes).digest('hex');

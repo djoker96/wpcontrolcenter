@@ -82,12 +82,8 @@ class WPCC_Agent_Backup_Manager {
             } elseif (strpos($filename, 'files-backup') !== false) {
                 $this->restore_files($filepath);
             } elseif (strpos($filename, 'full-backup') !== false) {
-                // Extract full zip
-                $zip = new ZipArchive();
-                if ($zip->open($filepath) === true) {
-                    $zip->extractTo($this->backup_dir);
-                    $zip->close();
-                    
+                // Extract full zip (Zip-Slip safe)
+                if (wpcc_agent_safe_extract_zip($filepath, $this->backup_dir)) {
                     // Look for extracted items
                     $pattern = $this->backup_dir . '/*';
                     foreach (glob($pattern) as $file) {
@@ -189,12 +185,7 @@ class WPCC_Agent_Backup_Manager {
     }
 
     private function restore_files($filepath) {
-        $zip = new ZipArchive();
-        if ($zip->open($filepath) === true) {
-            $zip->extractTo(WP_CONTENT_DIR);
-            $zip->close();
-        } else {
-            throw new Exception('Failed to extract zip file');
-        }
+        // Zip-Slip safe extraction: rejects entries that escape WP_CONTENT_DIR.
+        wpcc_agent_safe_extract_zip($filepath, WP_CONTENT_DIR);
     }
 }

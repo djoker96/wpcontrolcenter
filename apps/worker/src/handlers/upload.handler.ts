@@ -1,5 +1,5 @@
 import { PrismaClient, JobStatus, LogLevel } from '@wpcc/database';
-import { decrypt } from '@wpcc/shared';
+import { decrypt, assertPublicUrl } from '@wpcc/shared';
 import { createHmac } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -15,6 +15,8 @@ async function fetchWithTimeout(
   init: RequestInit = {},
   timeoutMs = 60_000,
 ): Promise<Response> {
+  await assertPublicUrl(url); // SSRF guard on all outbound requests
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 

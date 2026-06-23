@@ -58,11 +58,6 @@ export default function SitesPage() {
   }, [menuOpenId]);
 
   const fetchSites = async () => {
-    const token = localStorage.getItem("wpcc_token");
-    if (!token) {
-      router.push("/");
-      return;
-    }
     try {
       const body = await api.get<{ data: Site[] }>("/sites");
       setSites(body.data || []);
