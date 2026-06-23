@@ -50,6 +50,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       role: user.role,
+      tokenVersion: user.tokenVersion,
     };
 
     const accessToken = jwt.sign(tokenPayload, secret, { expiresIn: expiresIn as any, algorithm: 'HS256' });
@@ -140,7 +141,10 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: resetToken.userId },
-        data: { passwordHash },
+        data: {
+          passwordHash,
+          tokenVersion: { increment: 1 }, // invalidates all existing JWT tokens
+        },
       }),
       this.prisma.passwordResetToken.update({
         where: { id: resetToken.id },

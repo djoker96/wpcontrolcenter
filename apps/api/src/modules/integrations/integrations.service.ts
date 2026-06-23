@@ -41,7 +41,7 @@ export class IntegrationsService {
     return { authorizationUrl: url.toString(), state };
   }
 
-  async handleGoogleCallback(code: string, state?: string) {
+  async handleGoogleCallback(code: string, state?: string, userId?: string) {
     // Verify the signed state token before doing anything else. This binds the
     // authorization code to a flow that *this server* initiated.
     verifyStateToken(state);
@@ -98,15 +98,19 @@ export class IntegrationsService {
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
     // 3. Upsert Integration Account
-    // We update by provider and accountEmail if available, or just create a new one
+    // Key by provider + ownerId so each admin has their own integration
+    // account bound to them. If userId is absent (backward-compat), fall
+    // back to matching by provider + accountEmail.
     let account;
-    if (accountEmail) {
-      account = await this.prisma.integrationAccount.findFirst({
-        where: {
-          provider: IntegrationProvider.GOOGLE,
-          accountEmail,
-        },
-      });
+    const lookupWhere: Record<string, unknown> = { provider: IntegrationProvider.GOOGLE };
+    if (userId) {
+      lookupWhere.ownerId = userId;
+    } else if (accountEmail) {
+      lookupWhere.accountEmail = accountEmail;
+    }
+
+    if (Object.keys(lookupWhere).length > 1) {
+      account = await this.prisma.integrationAccount.findFirst({ where: lookupWhere as any });
     }
 
     if (account) {
@@ -117,6 +121,7 @@ export class IntegrationsService {
           ...(refreshTokenEncrypted ? { refreshTokenEncrypted } : {}),
           expiresAt,
           status: IntegrationStatus.ACTIVE,
+          ...(userId ? { ownerId: userId } : {}),
         },
       });
     } else {
@@ -128,6 +133,7 @@ export class IntegrationsService {
           refreshTokenEncrypted: refreshTokenEncrypted || '',
           expiresAt,
           status: IntegrationStatus.ACTIVE,
+          ...(userId ? { ownerId: userId } : {}),
         },
       });
     }

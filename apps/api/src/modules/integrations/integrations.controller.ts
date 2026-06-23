@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Param, UseGuards, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Param, Req, UseGuards, Query } from '@nestjs/common';
 import { IntegrationsService } from './integrations.service';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -24,11 +24,11 @@ export class IntegrationsController {
   }
 
   @Post('google/callback')
-  async callback(@Body() body: { code: string; state?: string }) {
+  async callback(@Body() body: { code: string; state?: string }, @Req() req: any) {
     if (!body.code) {
       return { success: false, error: 'Auth code is required' };
     }
-    const result = await this.integrationsService.handleGoogleCallback(body.code, body.state);
+    const result = await this.integrationsService.handleGoogleCallback(body.code, body.state, req.user?.id);
     return result;
   }
 
