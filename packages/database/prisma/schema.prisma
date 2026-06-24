@@ -15,6 +15,10 @@ enum UserRole {
   VIEWER
 }
 
+enum AuthProvider {
+  GOOGLE
+}
+
 enum EnvironmentType {
   PRODUCTION
   STAGING
@@ -146,23 +150,58 @@ enum LogLevel {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  passwordHash String     @map("password_hash")
-  fullName     String?    @map("full_name")
-  role         UserRole   @default(ADMIN)
-  isActive     Boolean    @default(true) @map("is_active")
-  tokenVersion Int        @default(0) @map("token_version")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
+  id              String     @id @default(cuid())
+  email           String     @unique
+  passwordHash    String?    @map("password_hash")
+  emailVerifiedAt DateTime?  @map("email_verified_at")
+  fullName        String?    @map("full_name")
+  role            UserRole   @default(ADMIN)
+  isActive        Boolean    @default(true) @map("is_active")
+  tokenVersion    Int        @default(0) @map("token_version")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
 
-  initiatedJobs          Job[]                 @relation("JobsInitiatedByUser")
+  initiatedJobs          Job[]                    @relation("JobsInitiatedByUser")
   auditLogs              AuditLog[]
   maintenanceSnapshots   MaintenanceSnapshot[]
   passwordResetTokens    PasswordResetToken[]
   integrationAccounts    IntegrationAccount[]
+  authIdentities         AuthIdentity[]
+  emailVerificationCodes EmailVerificationCode[]
 
   @@map("users")
+}
+
+model AuthIdentity {
+  id                String       @id @default(cuid())
+  userId            String       @map("user_id")
+  provider          AuthProvider
+  providerAccountId String       @map("provider_account_id")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("auth_identities")
+}
+
+model EmailVerificationCode {
+  id           String    @id @default(cuid())
+  userId       String    @map("user_id")
+  codeHash     String    @map("code_hash")
+  expiresAt    DateTime  @map("expires_at")
+  consumedAt   DateTime? @map("consumed_at")
+  attemptCount Int       @default(0) @map("attempt_count")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("email_verification_codes")
 }
 
 model Site {
@@ -620,5 +659,4 @@ model SiteBackup {
   @@index([siteId])
   @@map("site_backups")
 }
-
 

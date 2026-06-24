@@ -69,11 +69,13 @@ async function main(): Promise<void> {
     where: { email: 'admin@example.com' },
     update: {
       passwordHash: hashPassword(seededAdminPassword.password),
+      emailVerifiedAt: new Date(),
       role: UserRole.SUPER_ADMIN,
     },
     create: {
       email: 'admin@example.com',
       passwordHash: hashPassword(seededAdminPassword.password),
+      emailVerifiedAt: new Date(),
       fullName: 'System Administrator',
       role: UserRole.SUPER_ADMIN,
     },

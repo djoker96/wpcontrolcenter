@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "generate": "prisma generate",
+    "test": "node --test -r ts-node/register \"test/**/*.test.ts\"",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "seed": "ts-node prisma/seed.ts",
