@@ -14,57 +14,6 @@ export function getJwtSecret(): string {
   return getRequiredEnv('JWT_SECRET');
 }
 
-export interface SmtpConfig {
-  host: string;
-  port: number;
-  secure: boolean;
-  user: string;
-  password: string;
-  from: string;
-}
-
-export interface GoogleAuthConfig {
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-}
-
-function parsePort(name: string, value: string): number {
-  const port = Number(value);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`${name} must be an integer between 1 and 65535`);
-  }
-  return port;
-}
-
-export function getWebUrl(): string {
-  const value = getRequiredEnv('WEB_URL');
-  const url = new URL(value);
-  if (!['http:', 'https:'].includes(url.protocol)) {
-    throw new Error('WEB_URL must use http or https');
-  }
-  return url.origin;
-}
-
-export function getSmtpConfig(): SmtpConfig {
-  return {
-    host: getRequiredEnv('SMTP_HOST'),
-    port: parsePort('SMTP_PORT', getRequiredEnv('SMTP_PORT')),
-    secure: getRequiredEnv('SMTP_SECURE') === 'true',
-    user: getRequiredEnv('SMTP_USER'),
-    password: getRequiredEnv('SMTP_PASSWORD'),
-    from: getRequiredEnv('MAIL_FROM'),
-  };
-}
-
-export function getGoogleAuthConfig(): GoogleAuthConfig {
-  return {
-    clientId: getRequiredEnv('GOOGLE_CLIENT_ID'),
-    clientSecret: getRequiredEnv('GOOGLE_CLIENT_SECRET'),
-    redirectUri: getRequiredEnv('GOOGLE_AUTH_REDIRECT_URI'),
-  };
-}
-
 /**
  * Validate ALL required environment variables at application startup.
  * Call this once in main.ts bootstrap() to fail fast instead of crashing
@@ -76,21 +25,6 @@ export function validateEnvironment(): void {
     'JWT_SECRET',
     'AGENT_ENCRYPTION_KEY',
   ];
-
-  if (process.env.NODE_ENV === 'production') {
-    required.push(
-      'WEB_URL',
-      'SMTP_HOST',
-      'SMTP_PORT',
-      'SMTP_SECURE',
-      'SMTP_USER',
-      'SMTP_PASSWORD',
-      'MAIL_FROM',
-      'GOOGLE_CLIENT_ID',
-      'GOOGLE_CLIENT_SECRET',
-      'GOOGLE_AUTH_REDIRECT_URI',
-    );
-  }
 
   const missing: string[] = [];
   for (const name of required) {
@@ -104,18 +38,6 @@ export function validateEnvironment(): void {
       `Missing required environment variables: ${missing.join(', ')}. ` +
       `Set these before starting the application.`,
     );
-  }
-
-  if (required.every((name) => process.env[name])) {
-    if (process.env.NODE_ENV === 'production') {
-      getWebUrl();
-      getSmtpConfig();
-      const google = getGoogleAuthConfig();
-      const callback = new URL(google.redirectUri);
-      if (!['http:', 'https:'].includes(callback.protocol)) {
-        throw new Error('GOOGLE_AUTH_REDIRECT_URI must use http or https');
-      }
-    }
   }
 
   // Validate DATABASE_URL format (basic check)
