@@ -20,6 +20,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal Server Error';
     let error = 'Internal Server Error';
+    let code: string | undefined;
+    let extra: Record<string, unknown> = {};
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -32,6 +34,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
         const res = exceptionResponse as Record<string, unknown>;
         message = (res.message as string) || exception.message;
         error = (res.error as string) || exception.name;
+        code = typeof res.code === 'string' ? res.code : undefined;
+        const retryAfterSeconds = res.retryAfterSeconds;
+        if (
+          typeof retryAfterSeconds === 'number' &&
+          Number.isFinite(retryAfterSeconds) &&
+          Number.isInteger(retryAfterSeconds) &&
+          retryAfterSeconds >= 0
+        ) {
+          extra = { retryAfterSeconds };
+        }
 
         // Flatten validation error arrays into a single string
         if (Array.isArray(res.message)) {
@@ -61,6 +73,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       statusCode: status,
       message,
       error,
+      ...(code ? { code } : {}),
+      ...extra,
       timestamp: new Date().toISOString(),
       path: request.url,
     });
