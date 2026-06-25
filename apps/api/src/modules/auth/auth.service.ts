@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
+import { HttpStatus, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -7,23 +7,61 @@ import { hashPassword, verifyPassword, isLegacyPasswordHash } from '../../common
 import * as jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../../config/env';
 import * as crypto from 'crypto';
+import { MailService } from '../mail/mail.service';
+import { authError } from './auth.errors';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+  ) {}
+
+  createSession(user: { id: string; email: string; role: string; fullName: string | null; tokenVersion: number }) {
+    let secret: string;
+    try {
+      secret = getJwtSecret();
+    } catch (error) {
+      throw new InternalServerErrorException(error instanceof Error ? error.message : 'JWT_SECRET environment variable is missing');
+    }
+    const accessToken = jwt.sign(
+      { id: user.id, email: user.email, role: user.role, tokenVersion: user.tokenVersion },
+      secret,
+      { expiresIn: (process.env.JWT_EXPIRES_IN || '1d') as any, algorithm: 'HS256' },
+    );
+
+    return {
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        fullName: user.fullName,
+      },
+    };
+  }
 
   async login(payload: LoginDto) {
+    const email = payload.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({
-      where: { email: payload.email },
+      where: { email },
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw authError(HttpStatus.UNAUTHORIZED, 'INVALID_CREDENTIALS', 'Invalid email or password');
+    }
+
+    if (!user.emailVerifiedAt) {
+      throw authError(HttpStatus.FORBIDDEN, 'EMAIL_NOT_VERIFIED', 'Verify your email before signing in');
+    }
+
+    if (!user.passwordHash) {
+      throw authError(HttpStatus.BAD_REQUEST, 'PASSWORD_LOGIN_UNAVAILABLE', 'Continue with Google for this account');
     }
 
     const isPasswordValid = verifyPassword(payload.password, user.passwordHash);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw authError(HttpStatus.UNAUTHORIZED, 'INVALID_CREDENTIALS', 'Invalid email or password');
     }
 
     // Transparently upgrade weak legacy SHA-256 hashes to scrypt on successful login.
@@ -38,32 +76,7 @@ export class AuthService {
       }
     }
 
-    let secret: string;
-    try {
-      secret = getJwtSecret();
-    } catch (error) {
-      throw new InternalServerErrorException(error instanceof Error ? error.message : 'JWT_SECRET environment variable is missing');
-    }
-    const expiresIn = process.env.JWT_EXPIRES_IN || '1d';
-
-    const tokenPayload = {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      tokenVersion: user.tokenVersion,
-    };
-
-    const accessToken = jwt.sign(tokenPayload, secret, { expiresIn: expiresIn as any, algorithm: 'HS256' });
-
-    return {
-      accessToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        fullName: user.fullName,
-      },
-    };
+    return this.createSession(user);
   }
 
   async me(userId: string) {
@@ -82,11 +95,10 @@ export class AuthService {
   }
 
   async forgotPassword(payload: ForgotPasswordDto) {
+    const email = payload.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({
-      where: { email: payload.email },
+      where: { email },
     });
-
-    const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
 
     // Always return the same generic response to prevent account enumeration.
     const genericResponse = {
@@ -94,7 +106,7 @@ export class AuthService {
       message: 'If an account exists for that email, a password reset link has been sent',
     };
 
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || !user.emailVerifiedAt || !user.passwordHash) {
       return genericResponse;
     }
 
@@ -110,10 +122,13 @@ export class AuthService {
       },
     });
 
-    return {
-      ...genericResponse,
-      ...(isDev ? { resetToken: rawToken } : {}),
-    };
+    try {
+      await this.mail.sendPasswordResetLink(user.email, rawToken);
+    } catch {
+      throw authError(HttpStatus.SERVICE_UNAVAILABLE, 'EMAIL_DELIVERY_FAILED', 'The password reset email could not be sent');
+    }
+
+    return genericResponse;
   }
 
   async resetPassword(payload: ResetPasswordDto) {
@@ -125,15 +140,15 @@ export class AuthService {
     });
 
     if (!resetToken) {
-      throw new UnauthorizedException('Invalid or expired token');
+      throw authError(HttpStatus.UNAUTHORIZED, 'RESET_TOKEN_INVALID', 'Invalid or expired token');
     }
 
     if (resetToken.usedAt) {
-      throw new UnauthorizedException('Token has already been used');
+      throw authError(HttpStatus.UNAUTHORIZED, 'RESET_TOKEN_USED', 'Token has already been used');
     }
 
     if (new Date() > resetToken.expiresAt) {
-      throw new UnauthorizedException('Token has expired');
+      throw authError(HttpStatus.UNAUTHORIZED, 'RESET_TOKEN_EXPIRED', 'Token has expired');
     }
 
     const passwordHash = hashPassword(payload.password);
