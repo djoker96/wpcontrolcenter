@@ -108,3 +108,19 @@ test('completeAuthorization resolves a P2002 race through the winning identity',
   assert.equal(result.user.id, 'user-1');
   assert.equal(fixture.identities.length, 1);
 });
+
+test('constructor does not require Google environment until OAuth is used', () => {
+  const originalClientId = process.env.GOOGLE_CLIENT_ID;
+  const originalClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const originalRedirectUri = process.env.GOOGLE_AUTH_REDIRECT_URI;
+  delete process.env.GOOGLE_CLIENT_ID;
+  delete process.env.GOOGLE_CLIENT_SECRET;
+  delete process.env.GOOGLE_AUTH_REDIRECT_URI;
+  try {
+    assert.doesNotThrow(() => new GoogleAuthService({} as any, {} as any));
+  } finally {
+    process.env.GOOGLE_CLIENT_ID = originalClientId;
+    process.env.GOOGLE_CLIENT_SECRET = originalClientSecret;
+    process.env.GOOGLE_AUTH_REDIRECT_URI = originalRedirectUri;
+  }
+});

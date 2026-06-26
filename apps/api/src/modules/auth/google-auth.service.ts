@@ -55,14 +55,19 @@ class GoogleLibraryAdapter implements GoogleAdapter {
 
 @Injectable()
 export class GoogleAuthService {
-  private readonly adapter: GoogleAdapter;
+  private adapter?: GoogleAdapter;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
     @Optional() @Inject(GOOGLE_ADAPTER) adapter?: GoogleAdapter,
   ) {
-    this.adapter = adapter ?? new GoogleLibraryAdapter(getGoogleAuthConfig());
+    this.adapter = adapter;
+  }
+
+  private getAdapter(): GoogleAdapter {
+    this.adapter ??= new GoogleLibraryAdapter(getGoogleAuthConfig());
+    return this.adapter;
   }
 
   createAuthorization(): GoogleAuthorization {
@@ -70,15 +75,16 @@ export class GoogleAuthService {
     const nonce = randomBytes(32).toString('base64url');
     const payload = Buffer.from(JSON.stringify({ state, nonce, exp: Date.now() + 10 * 60 * 1000 })).toString('base64url');
     const signature = createHmac('sha256', getJwtSecret()).update(payload).digest('base64url');
-    return { url: this.adapter.authorizationUrl(state, nonce), signedCookie: `${payload}.${signature}` };
+    return { url: this.getAdapter().authorizationUrl(state, nonce), signedCookie: `${payload}.${signature}` };
   }
 
   async completeAuthorization(code: string, state: string, signedCookie?: string): Promise<{ accessToken: string; user: any }> {
     let providerAccountId: string | undefined;
     try {
       const nonce = this.verifyState(signedCookie, state);
-      const idToken = await this.adapter.exchangeCode(code);
-      const profile = await this.adapter.verifyIdToken(idToken);
+      const adapter = this.getAdapter();
+      const idToken = await adapter.exchangeCode(code);
+      const profile = await adapter.verifyIdToken(idToken);
       if (!profile.sub || !profile.email || !profile.email_verified || profile.nonce !== nonce) {
         throw new Error('Google profile failed verification');
       }

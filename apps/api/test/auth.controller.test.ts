@@ -49,8 +49,10 @@ test('login and Google callback set the same secure session cookie contract', as
   await withWebUrl(async () => {
     const { controller, cookies, clearedCookies, redirects, response } = createControllerFixture();
 
-    await controller.login({ email: 'a@example.com', password: 'password' }, response);
+    const loginResult = await controller.login({ email: 'a@example.com', password: 'password' }, response);
     assert.equal(cookies[0][0], 'wpcc_token');
+    assert.deepEqual(loginResult, { user: { id: 'u1' } });
+    assert.equal('accessToken' in loginResult, false);
 
     await controller.googleCallback(
       'code',

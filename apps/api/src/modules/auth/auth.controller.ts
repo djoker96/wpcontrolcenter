@@ -45,8 +45,7 @@ export class AuthController {
     const result = await this.authService.login(payload);
     // Primary auth transport: httpOnly cookie (not readable by JS → XSS-safe).
     res.cookie(AUTH_COOKIE, result.accessToken, authCookieOptions());
-    // Return user info only; token also returned for legacy/non-browser clients.
-    return result;
+    return { user: result.user };
   }
 
   @Post('logout')

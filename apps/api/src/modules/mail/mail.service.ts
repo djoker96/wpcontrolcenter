@@ -9,17 +9,23 @@ export interface MailTransport {
   sendMail(message: SendMailOptions): Promise<unknown> | unknown;
 }
 
+type LazyValue<T> = T | (() => T);
+
 @Injectable()
 export class MailService {
   constructor(
     @Inject(MAIL_TRANSPORT) private readonly transport: MailTransport,
-    @Inject(MAIL_FROM) private readonly from: string,
-    @Inject(WEB_URL) private readonly webUrl: string,
+    @Inject(MAIL_FROM) private readonly from: LazyValue<string>,
+    @Inject(WEB_URL) private readonly webUrl: LazyValue<string>,
   ) {}
+
+  private resolve<T>(value: LazyValue<T>): T {
+    return typeof value === 'function' ? (value as () => T)() : value;
+  }
 
   async sendVerificationCode(to: string, code: string): Promise<void> {
     await this.transport.sendMail({
-      from: this.from,
+      from: this.resolve(this.from),
       to,
       subject: 'Verify your WP Control Center email',
       text: `Your WP Control Center verification code is ${code}. It expires in 10 minutes. If you did not create this account, ignore this email.`,
@@ -28,13 +34,13 @@ export class MailService {
   }
 
   async sendPasswordResetLink(to: string, rawToken: string): Promise<void> {
-    const url = new URL('/', this.webUrl);
+    const url = new URL('/', this.resolve(this.webUrl));
     url.searchParams.set('mode', 'reset-password');
     url.searchParams.set('token', rawToken);
     const link = url.toString();
 
     await this.transport.sendMail({
-      from: this.from,
+      from: this.resolve(this.from),
       to,
       subject: 'Reset your WP Control Center password',
       text: `Reset your password within one hour: ${link}\n\nIf you did not request this reset, ignore this email.`,
