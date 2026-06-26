@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="styles.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .wpcc-scroll::-webkit-scrollbar { width: 10px; }
+  .wpcc-scroll::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</helmet>
+
+<div data-screen-label="Monitoring (hi-fi)" style="display:flex; min-height:100vh; background:var(--background); color:var(--foreground); font-family:var(--font-sans); font-size:var(--text-base);">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside style="width:248px; flex:none; background:var(--sidebar); border-right:1px solid var(--sidebar-border); display:flex; flex-direction:column;">
+    <div style="height:60px; flex:none; display:flex; align-items:center; gap:11px; padding:0 18px; border-bottom:1px solid var(--sidebar-border);">
+      <span style="width:30px; height:30px; flex:none; background:var(--primary); color:var(--primary-foreground); display:flex; align-items:center; justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2"/><rect width="20" height="8" x="2" y="14"/><path d="M6 6h.01"/><path d="M6 18h.01"/></svg>
+      </span>
+      <span style="font-family:var(--font-display); font-weight:700; font-size:16px; letter-spacing:-0.01em; color:var(--sidebar-foreground); white-space:nowrap;">WP Control</span>
+    </div>
+    <nav style="flex:1; padding:16px 12px; display:flex; flex-direction:column; gap:3px;">
+      <div style="font-family:var(--font-display); font-size:10.5px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted-foreground); padding:4px 11px 8px;">Platform</div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3"/><rect width="7" height="5" x="14" y="3"/><rect width="7" height="9" x="14" y="12"/><rect width="7" height="5" x="3" y="16"/></svg>
+        <span style="font-weight:500; font-size:13.5px; white-space:nowrap;">Dashboard</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+        <span style="font-weight:500; font-size:13.5px; flex:1; white-space:nowrap;">Sites</span>
+        <span style="font-size:11px; font-weight:600; color:var(--muted-foreground); background:var(--muted); padding:1px 6px;">18</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4"/><path d="M12 16V8"/></svg>
+        <span style="font-weight:500; font-size:13.5px; flex:1; white-space:nowrap;">Updates</span>
+        <span style="font-size:11px; font-weight:600; color:var(--primary-foreground); background:var(--primary); padding:1px 6px;">9</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--sidebar-foreground); background:var(--sidebar-accent); box-shadow:inset 3px 0 0 var(--primary);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span style="font-weight:600; font-size:13.5px; flex:1; white-space:nowrap;">Monitoring</span>
+        <span style="width:7px; height:7px; flex:none; border-radius:var(--radius-full); background:var(--danger);"></span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+        <span style="font-weight:500; font-size:13.5px; white-space:nowrap;">Traffic</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+        <span style="font-weight:500; font-size:13.5px; white-space:nowrap;">Audit log</span>
+      </div>
+      <div style="font-family:var(--font-display); font-size:10.5px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted-foreground); padding:18px 11px 8px;">Account</div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>
+        <span style="font-weight:500; font-size:13.5px; white-space:nowrap;">Settings</span>
+      </div>
+    </nav>
+    <div style="flex:none; border-top:1px solid var(--sidebar-border); padding:12px 14px; display:flex; align-items:center; gap:10px;">
+      <span style="width:32px; height:32px; flex:none; border-radius:var(--radius-full); background:var(--muted); color:var(--foreground); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;">MT</span>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:13px; font-weight:600; color:var(--sidebar-foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Minh Tran</div>
+        <div style="font-size:11.5px; color:var(--muted-foreground);">Admin</div>
+      </div>
+      <span style="color:var(--muted-foreground); display:flex;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+    <header style="height:60px; flex:none; border-bottom:1px solid var(--border); padding:0 24px; display:flex; align-items:center; justify-content:space-between; gap:16px; background:var(--background);">
+      <div>
+        <div style="font-family:var(--font-display); font-weight:700; font-size:20px; letter-spacing:-0.01em; line-height:1.1;">Monitoring</div>
+        <div style="font-size:12px; color:var(--muted-foreground); margin-top:1px;">HTTP checks every 5 min · last run 1m ago</div>
+      </div>
+      <div style="display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 14px; border:1px solid var(--border); background:var(--background); font-weight:600; font-size:13px; cursor:pointer;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>
+        Configure checks
+      </div>
+    </header>
+
+    <main class="wpcc-scroll" style="flex:1; overflow:auto; background:var(--muted); padding:24px; display:flex; flex-direction:column; gap:16px;">
+      <!-- KPI strip -->
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px;">
+        <div style="background:var(--card); border:1px solid var(--border); padding:16px 18px;"><div style="font-size:12px; font-weight:500; color:var(--muted-foreground);">Avg uptime · 30d</div><div style="font-family:var(--font-display); font-weight:700; font-size:26px; margin-top:8px;">99.4%</div></div>
+        <div style="background:var(--card); border:1px solid var(--border); padding:16px 18px;"><div style="font-size:12px; font-weight:500; color:var(--muted-foreground);">Avg response</div><div style="font-family:var(--font-display); font-weight:700; font-size:26px; margin-top:8px;">268<span style="font-size:14px; color:var(--muted-foreground);"> ms</span></div></div>
+        <div style="background:var(--card); border:1px solid var(--border); padding:16px 18px;"><div style="font-size:12px; font-weight:500; color:var(--muted-foreground);">Checks today</div><div style="font-family:var(--font-display); font-weight:700; font-size:26px; margin-top:8px;">8,640</div></div>
+        <div style="background:var(--card); border:1px solid var(--border); padding:16px 18px;"><div style="font-size:12px; font-weight:500; color:var(--muted-foreground);">Open incidents</div><div style="font-family:var(--font-display); font-weight:700; font-size:26px; margin-top:8px; display:flex; align-items:center; gap:8px;">1 <span style="width:9px; height:9px; border-radius:var(--radius-full); background:var(--danger);"></span></div></div>
+      </div>
+
+      <!-- uptime per-site -->
+      <div style="background:var(--card); border:1px solid var(--border);">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border);">
+          <span style="font-family:var(--font-display); font-weight:600; font-size:15px;">Uptime · last 90 checks</span>
+          <span style="font-size:12px; color:var(--muted-foreground);">per site</span>
+        </div>
+        <sc-for list="{{ sites }}" as="s" hint-placeholder-count="6">
+          <div style="display:flex; align-items:center; gap:16px; padding:13px 18px; border-bottom:1px solid var(--border);">
+            <span style="width:9px; height:9px; flex:none; border-radius:var(--radius-full); background:{{ s.dot }};"></span>
+            <span style="font-size:13px; font-weight:600; width:188px; flex:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ s.name }}</span>
+            <div style="flex:1; display:flex; gap:2px; align-items:center;">
+              <sc-for list="{{ s.bars }}" as="b" hint-placeholder-count="40">
+                <span style="flex:1; height:20px; background:{{ b }};"></span>
+              </sc-for>
+            </div>
+            <span style="font-size:13px; font-weight:600; width:64px; text-align:right; flex:none;">{{ s.uptime }}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- incidents -->
+      <div style="background:var(--card); border:1px solid var(--border);">
+        <div style="padding:14px 18px; border-bottom:1px solid var(--border); font-family:var(--font-display); font-weight:600; font-size:15px;">Incident history</div>
+        <div style="display:grid; grid-template-columns:1.4fr 1.2fr 1fr 110px; gap:14px; padding:10px 18px; border-bottom:1px solid var(--border); font-family:var(--font-display); font-size:11px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:var(--muted-foreground);">
+          <span>Site</span><span>Started</span><span>Duration</span><span style="text-align:right;">Status</span>
+        </div>
+        <sc-for list="{{ incidents }}" as="i" hint-placeholder-count="4">
+          <div style="display:grid; grid-template-columns:1.4fr 1.2fr 1fr 110px; gap:14px; align-items:center; padding:13px 18px; border-bottom:1px solid var(--border); font-size:13px;">
+            <span style="font-weight:600; display:flex; align-items:center; gap:9px;"><span style="width:8px; height:8px; border-radius:var(--radius-full); background:{{ i.dot }};"></span>{{ i.site }}</span>
+            <span style="color:var(--muted-foreground);">{{ i.started }}</span>
+            <span style="color:var(--muted-foreground);">{{ i.dur }}</span>
+            <span style="justify-self:end; font-size:11.5px; font-weight:500; padding:2px 9px; background:{{ i.badgeBg }}; color:{{ i.badgeColor }}; border:1px solid {{ i.badgeBorder }};">{{ i.status }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1440, &quot;height&quot;: 900}}">
+class Component extends DCLogic {
+  renderVals() {
+    const mkBars = (warnAt, downAt) => {
+      const a = [];
+      for (let i = 0; i < 40; i++) {
+        let c = "var(--success)";
+        if (warnAt.includes(i)) c = "var(--warning)";
+        if (downAt.includes(i)) c = "var(--danger)";
+        a.push(c);
+      }
+      return a;
+    };
+    const sites = [
+      { name: "acme-corp.com", status: "ok", uptime: "99.98%", bars: mkBars([], []) },
+      { name: "bluewave.io", status: "ok", uptime: "99.91%", bars: mkBars([22], []) },
+      { name: "shop.northstar.co", status: "down", uptime: "97.20%", bars: mkBars([36], [37, 38, 39]) },
+      { name: "lotus-clinic.vn", status: "ok", uptime: "99.95%", bars: mkBars([14], []) },
+      { name: "nordic-travel.no", status: "ok", uptime: "99.88%", bars: mkBars([8, 27], []) },
+      { name: "pixel-studio.co", status: "ok", uptime: "99.97%", bars: mkBars([], []) },
+    ].map((s) => ({
+      ...s,
+      dot: s.status === "down" ? "var(--danger)" : "var(--success)",
+    }));
+
+    const tones = {
+      down: { bg: "color-mix(in oklch, var(--danger) 12%, white)", fg: "var(--danger)", bd: "color-mix(in oklch, var(--danger) 32%, white)", dot: "var(--danger)" },
+      resolved: { bg: "color-mix(in oklch, var(--success) 14%, white)", fg: "var(--success)", bd: "color-mix(in oklch, var(--success) 35%, white)", dot: "var(--success)" },
+    };
+    const mkI = (site, started, dur, status, t) => {
+      const c = tones[t];
+      return { site, started, dur, status, dot: c.dot, badgeBg: c.bg, badgeColor: c.fg, badgeBorder: c.bd };
+    };
+    const incidents = [
+      mkI("shop.northstar.co", "Today · 13:58", "Ongoing 42m", "Down", "down"),
+      mkI("bluewave.io", "Jun 19 · 03:11", "8m", "Resolved", "resolved"),
+      mkI("nordic-travel.no", "Jun 17 · 19:02", "2m", "Resolved", "resolved"),
+      mkI("lotus-clinic.vn", "Jun 14 · 22:40", "3m", "Resolved", "resolved"),
+    ];
+
+    return { sites, incidents };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!-- @dsCard group="Spacing" viewport="700x180" name="Radius, spacing & elevation" subtitle="--radius:0 · 4px scale · overlay shadows" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<style>
+  body{margin:0;background:var(--background);font-family:var(--font-sans);color:var(--foreground);padding:22px;display:flex;gap:36px;}
+  .lbl{font-family:var(--font-display);font-size:var(--text-xs);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--muted-foreground);margin:0 0 12px;}
+  .box{background:var(--muted);border:1px solid var(--border);}
+  .sp{background:var(--primary);height:14px;}
+  .shrow{display:flex;gap:16px;}
+  .sh{width:60px;height:48px;background:var(--card);border:1px solid var(--border);}
+  .cap{font-size:var(--text-xs);color:var(--muted-foreground);margin-top:6px;}
+</style></head>
+<body>
+  <div>
+    <p class="lbl">Radius = 0</p>
+    <div style="display:flex;gap:12px;align-items:flex-end;">
+      <div><div class="box" style="width:54px;height:54px;border-radius:var(--radius-lg);"></div><div class="cap">card</div></div>
+      <div><div class="box" style="width:54px;height:34px;border-radius:var(--radius-md);"></div><div class="cap">control</div></div>
+      <div><div class="box" style="width:34px;height:34px;border-radius:var(--radius-full);"></div><div class="cap">dot/switch</div></div>
+    </div>
+  </div>
+  <div>
+    <p class="lbl">Spacing (4px base)</p>
+    <div style="display:flex;flex-direction:column;gap:7px;">
+      <div class="sp" style="width:var(--space-2);"></div>
+      <div class="sp" style="width:var(--space-4);"></div>
+      <div class="sp" style="width:var(--space-6);"></div>
+      <div class="sp" style="width:var(--space-8);"></div>
+      <div class="sp" style="width:var(--space-12);"></div>
+    </div>
+  </div>
+  <div>
+    <p class="lbl">Elevation</p>
+    <div class="shrow">
+      <div><div class="sh" style="box-shadow:var(--shadow-sm);"></div><div class="cap">sm</div></div>
+      <div><div class="sh" style="box-shadow:var(--shadow-md);"></div><div class="cap">md</div></div>
+      <div><div class="sh" style="box-shadow:var(--shadow-lg);"></div><div class="cap">lg · overlay</div></div>
+    </div>
+  </div>
+</body></html>

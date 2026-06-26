@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="styles.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .wpcc-scroll::-webkit-scrollbar { width: 10px; }
+  .wpcc-scroll::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</helmet>
+
+<div data-screen-label="Sites (hi-fi)" style="display:flex; min-height:100vh; background:var(--background); color:var(--foreground); font-family:var(--font-sans); font-size:var(--text-base);">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside style="width:248px; flex:none; background:var(--sidebar); border-right:1px solid var(--sidebar-border); display:flex; flex-direction:column;">
+    <div style="height:60px; flex:none; display:flex; align-items:center; gap:11px; padding:0 18px; border-bottom:1px solid var(--sidebar-border);">
+      <span style="width:30px; height:30px; flex:none; background:var(--primary); color:var(--primary-foreground); display:flex; align-items:center; justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2"/><rect width="20" height="8" x="2" y="14"/><path d="M6 6h.01"/><path d="M6 18h.01"/></svg>
+      </span>
+      <span style="font-family:var(--font-display); font-weight:700; font-size:16px; letter-spacing:-0.01em; color:var(--sidebar-foreground); white-space:nowrap;">WP Control</span>
+    </div>
+    <nav style="flex:1; padding:16px 12px; display:flex; flex-direction:column; gap:3px;">
+      <div style="font-family:var(--font-display); font-size:10.5px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted-foreground); padding:4px 11px 8px;">Platform</div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3"/><rect width="7" height="5" x="14" y="3"/><rect width="7" height="9" x="14" y="12"/><rect width="7" height="5" x="3" y="16"/></svg>
+        <span style="font-weight:500; font-size:13.5px; white-space:nowrap;">Dashboard</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--sidebar-foreground); background:var(--sidebar-accent); box-shadow:inset 3px 0 0 var(--primary);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+        <span style="font-weight:600; font-size:13.5px; flex:1; white-space:nowrap;">Sites</span>
+        <span style="font-size:11px; font-weight:600; color:var(--foreground); background:var(--background); padding:1px 6px;">18</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4"/><path d="M12 16V8"/></svg>
+        <span style="font-weight:500; font-size:13.5px; flex:1; white-space:nowrap;">Updates</span>
+        <span style="font-size:11px; font-weight:600; color:var(--primary-foreground); background:var(--primary); padding:1px 6px;">9</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span style="font-weight:500; font-size:13.5px; flex:1; white-space:nowrap;">Monitoring</span>
+        <span style="width:7px; height:7px; flex:none; border-radius:var(--radius-full); background:var(--danger);"></span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+        <span style="font-weight:500; font-size:13.5px; white-space:nowrap;">Traffic</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+        <span style="font-weight:500; font-size:13.5px; white-space:nowrap;">Audit log</span>
+      </div>
+      <div style="font-family:var(--font-display); font-size:10.5px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted-foreground); padding:18px 11px 8px;">Account</div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>
+        <span style="font-weight:500; font-size:13.5px; white-space:nowrap;">Settings</span>
+      </div>
+    </nav>
+    <div style="flex:none; border-top:1px solid var(--sidebar-border); padding:12px 14px; display:flex; align-items:center; gap:10px;">
+      <span style="width:32px; height:32px; flex:none; border-radius:var(--radius-full); background:var(--muted); color:var(--foreground); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;">MT</span>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:13px; font-weight:600; color:var(--sidebar-foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Minh Tran</div>
+        <div style="font-size:11.5px; color:var(--muted-foreground);">Admin</div>
+      </div>
+      <span style="color:var(--muted-foreground); display:flex;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+    <header style="height:60px; flex:none; border-bottom:1px solid var(--border); padding:0 24px; display:flex; align-items:center; justify-content:space-between; gap:16px; background:var(--background);">
+      <div>
+        <div style="font-family:var(--font-display); font-weight:700; font-size:20px; letter-spacing:-0.01em; line-height:1.1;">Sites</div>
+        <div style="font-size:12px; color:var(--muted-foreground); margin-top:1px;">18 connected · 2 need attention</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="display:flex; align-items:center; gap:8px; width:220px; height:36px; padding:0 11px; border:1px solid var(--input); background:var(--background); color:var(--muted-foreground);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span style="font-size:13px;">Search sites…</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; height:36px; padding:0 12px; border:1px solid var(--border); background:var(--background); font-size:13px; font-weight:500;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted-foreground);"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
+          All tags
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted-foreground);"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+        <div style="display:flex; height:36px; border:1px solid var(--border); background:var(--background);">
+          <span style="display:flex; align-items:center; gap:6px; padding:0 11px; background:var(--accent); color:var(--accent-foreground); font-size:12.5px; font-weight:600; border-right:1px solid var(--border);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3"/><rect width="7" height="7" x="14" y="3"/><rect width="7" height="7" x="14" y="14"/><rect width="7" height="7" x="3" y="14"/></svg>Cards</span>
+          <span style="display:flex; align-items:center; gap:6px; padding:0 11px; color:var(--muted-foreground); font-size:12.5px; font-weight:500;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>List</span>
+        </div>
+        <div style="display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 15px; background:var(--primary); color:var(--primary-foreground); font-weight:600; font-size:13.5px; cursor:pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          Add site
+        </div>
+      </div>
+    </header>
+
+    <main class="wpcc-scroll" style="flex:1; overflow:auto; background:var(--muted); padding:24px; display:grid; grid-template-columns:repeat(3,1fr); grid-auto-rows:min-content; gap:16px; align-content:start;">
+      <sc-for list="{{ sites }}" as="s" hint-placeholder-count="9">
+        <div style="position:relative; background:var(--card); border:1px solid var(--border); padding:16px; display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px;">
+            <div style="display:flex; align-items:center; gap:9px; min-width:0;">
+              <span style="width:9px; height:9px; flex:none; border-radius:var(--radius-full); background:{{ s.dot }};"></span>
+              <span style="font-weight:600; font-size:14px; color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ s.name }}</span>
+            </div>
+            <span style="display:flex; flex:none; color:var(--muted-foreground); cursor:pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
+          </div>
+
+          <sc-if value="{{ s.menuOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; top:42px; right:14px; width:190px; background:var(--popover); border:1px solid var(--border); box-shadow:var(--shadow-lg); padding:5px; z-index:5;">
+              <div style="display:flex; align-items:center; gap:9px; font-size:12.5px; font-weight:500; padding:8px 9px; background:var(--accent);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4"/><path d="M12 16V8"/></svg>Update all (3)</div>
+              <div style="display:flex; align-items:center; gap:9px; font-size:12.5px; padding:8px 9px; color:var(--foreground);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>Clear cache</div>
+              <div style="display:flex; align-items:center; gap:9px; font-size:12.5px; padding:8px 9px; color:var(--foreground);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>Maintenance mode</div>
+              <div style="display:flex; align-items:center; gap:9px; font-size:12.5px; padding:8px 9px; color:var(--foreground);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>Optimize DB</div>
+              <div style="height:1px; background:var(--border); margin:4px 2px;"></div>
+              <div style="display:flex; align-items:center; gap:9px; font-size:12.5px; padding:8px 9px; color:var(--danger);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>Disable site</div>
+            </div>
+          </sc-if>
+
+          <div style="display:flex; gap:7px;">
+            <span style="font-size:11px; font-weight:500; color:var(--muted-foreground); background:var(--muted); padding:2px 8px;">{{ s.env }}</span>
+            <span style="font-size:11px; font-weight:500; color:var(--muted-foreground); background:var(--muted); padding:2px 8px;">{{ s.tags }}</span>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; gap:10px; padding:11px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border);">
+            <div><div style="font-family:var(--font-display); font-weight:700; font-size:16px;">{{ s.updates }}</div><div style="font-size:11px; color:var(--muted-foreground); margin-top:1px;">updates</div></div>
+            <div><div style="font-family:var(--font-display); font-weight:700; font-size:16px;">{{ s.uptime }}</div><div style="font-size:11px; color:var(--muted-foreground); margin-top:1px;">uptime</div></div>
+            <div><div style="font-family:var(--font-display); font-weight:700; font-size:16px;">{{ s.wp }}</div><div style="font-size:11px; color:var(--muted-foreground); margin-top:1px;">WP</div></div>
+          </div>
+
+          <div style="display:flex; gap:8px;">
+            <span style="flex:1; height:32px; display:flex; align-items:center; justify-content:center; background:var(--primary); color:var(--primary-foreground); font-weight:600; font-size:12.5px; cursor:pointer;">Update</span>
+            <span style="flex:1; height:32px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border); color:var(--foreground); font-weight:600; font-size:12.5px; cursor:pointer;">Tools</span>
+          </div>
+        </div>
+      </sc-for>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1440, &quot;height&quot;: 900}}">
+class Component extends DCLogic {
+  renderVals() {
+    const dotFor = (st) =>
+      st === "Down" ? "var(--danger)" : st === "Updates" ? "var(--warning)" : "var(--success)";
+    const raw = [
+      { name: "acme-corp.com", env: "Production", tags: "client", status: "Online", updates: "3", uptime: "99.98%", wp: "6.5.2", menuOpen: true },
+      { name: "bluewave.io", env: "Production", tags: "client", status: "Updates", updates: "7", uptime: "99.91%", wp: "6.4.3" },
+      { name: "shop.northstar.co", env: "Production", tags: "priority", status: "Down", updates: "1", uptime: "97.20%", wp: "6.5.2" },
+      { name: "staging.acme-corp.com", env: "Staging", tags: "internal", status: "Online", updates: "0", uptime: "99.99%", wp: "6.5.2" },
+      { name: "lotus-clinic.vn", env: "Production", tags: "client", status: "Online", updates: "2", uptime: "99.95%", wp: "6.4.3" },
+      { name: "dev.bluewave.io", env: "Dev", tags: "internal", status: "Online", updates: "5", uptime: "—", wp: "6.5.2" },
+      { name: "nordic-travel.no", env: "Production", tags: "client", status: "Updates", updates: "4", uptime: "99.88%", wp: "6.4.3" },
+      { name: "pixel-studio.co", env: "Production", tags: "client", status: "Online", updates: "0", uptime: "99.97%", wp: "6.5.2" },
+      { name: "helpdesk.acme-corp.com", env: "Production", tags: "internal", status: "Online", updates: "1", uptime: "99.93%", wp: "6.5.2" },
+    ];
+    const sites = raw.map((s) => ({ ...s, dot: dotFor(s.status) }));
+    return { sites };
+  }
+}
+</script>
+</body>
+</html>

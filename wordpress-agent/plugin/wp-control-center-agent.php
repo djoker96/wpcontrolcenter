@@ -26,6 +26,7 @@ require_once WPCC_AGENT_PATH . 'includes/class-core-manager.php';
 require_once WPCC_AGENT_PATH . 'includes/class-maintenance-manager.php';
 require_once WPCC_AGENT_PATH . 'includes/class-cache-manager.php';
 require_once WPCC_AGENT_PATH . 'includes/class-db-manager.php';
+require_once WPCC_AGENT_PATH . 'includes/class-object-cache-manager.php';
 require_once WPCC_AGENT_PATH . 'includes/class-file-editor.php';
 require_once WPCC_AGENT_PATH . 'includes/class-logger.php';
 require_once WPCC_AGENT_PATH . 'includes/class-backup-manager.php';

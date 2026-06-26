@@ -1,0 +1,29 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Status & charts" subtitle="Health semantics + red chart scale" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<style>
+  body{margin:0;background:var(--background);font-family:var(--font-sans);padding:20px;}
+  .lbl{font-family:var(--font-display);font-size:var(--text-xs);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--muted-foreground);margin:0 0 10px;}
+  .row{display:flex;gap:16px;margin-bottom:16px;}
+  .sw{flex:1;}
+  .chip{height:42px;border:1px solid var(--border);border-radius:var(--radius-lg);}
+  .name{font-size:var(--text-xs);font-weight:var(--weight-medium);color:var(--foreground);margin:7px 0 0;}
+  .charts{display:flex;gap:6px;}
+  .charts .chip{flex:1;}
+</style></head>
+<body>
+  <p class="lbl">Status</p>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--success)"></div><div class="name">success</div></div>
+    <div class="sw"><div class="chip" style="background:var(--warning)"></div><div class="name">warning</div></div>
+    <div class="sw"><div class="chip" style="background:var(--danger)"></div><div class="name">danger</div></div>
+  </div>
+  <p class="lbl">Chart scale (chart-1 → chart-5)</p>
+  <div class="charts">
+    <div class="chip" style="background:var(--chart-1)"></div>
+    <div class="chip" style="background:var(--chart-2)"></div>
+    <div class="chip" style="background:var(--chart-3)"></div>
+    <div class="chip" style="background:var(--chart-4)"></div>
+    <div class="chip" style="background:var(--chart-5)"></div>
+  </div>
+</body></html>

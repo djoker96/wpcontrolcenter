@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="styles.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .wpcc-scroll::-webkit-scrollbar { width: 10px; }
+  .wpcc-scroll::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</helmet>
+
+<div data-screen-label="Traffic (hi-fi)" style="display:flex; min-height:100vh; background:var(--background); color:var(--foreground); font-family:var(--font-sans); font-size:var(--text-base);">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside style="width:248px; flex:none; background:var(--sidebar); border-right:1px solid var(--sidebar-border); display:flex; flex-direction:column;">
+    <div style="height:60px; flex:none; display:flex; align-items:center; gap:11px; padding:0 18px; border-bottom:1px solid var(--sidebar-border);">
+      <span style="width:30px; height:30px; flex:none; background:var(--primary); color:var(--primary-foreground); display:flex; align-items:center; justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2"/><rect width="20" height="8" x="2" y="14"/><path d="M6 6h.01"/><path d="M6 18h.01"/></svg>
+      </span>
+      <span style="font-family:var(--font-display); font-weight:700; font-size:16px; letter-spacing:-0.01em; color:var(--sidebar-foreground); white-space:nowrap;">WP Control</span>
+    </div>
+    <nav style="flex:1; padding:16px 12px; display:flex; flex-direction:column; gap:3px;">
+      <div style="font-family:var(--font-display); font-size:10.5px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted-foreground); padding:4px 11px 8px;">Platform</div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3"/><rect width="7" height="5" x="14" y="3"/><rect width="7" height="9" x="14" y="12"/><rect width="7" height="5" x="3" y="16"/></svg>
+        <span style="font-weight:500; font-size:13.5px; white-space:nowrap;">Dashboard</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+        <span style="font-weight:500; font-size:13.5px; flex:1; white-space:nowrap;">Sites</span>
+        <span style="font-size:11px; font-weight:600; color:var(--muted-foreground); background:var(--muted); padding:1px 6px;">18</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4"/><path d="M12 16V8"/></svg>
+        <span style="font-weight:500; font-size:13.5px; flex:1; white-space:nowrap;">Updates</span>
+        <span style="font-size:11px; font-weight:600; color:var(--primary-foreground); background:var(--primary); padding:1px 6px;">9</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span style="font-weight:500; font-size:13.5px; flex:1; white-space:nowrap;">Monitoring</span>
+        <span style="width:7px; height:7px; flex:none; border-radius:var(--radius-full); background:var(--danger);"></span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--sidebar-foreground); background:var(--sidebar-accent); box-shadow:inset 3px 0 0 var(--primary);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+        <span style="font-weight:600; font-size:13.5px; white-space:nowrap;">Traffic</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+        <span style="font-weight:500; font-size:13.5px; white-space:nowrap;">Audit log</span>
+      </div>
+      <div style="font-family:var(--font-display); font-size:10.5px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted-foreground); padding:18px 11px 8px;">Account</div>
+      <div style="display:flex; align-items:center; gap:11px; padding:9px 11px; color:var(--muted-foreground);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>
+        <span style="font-weight:500; font-size:13.5px; white-space:nowrap;">Settings</span>
+      </div>
+    </nav>
+    <div style="flex:none; border-top:1px solid var(--sidebar-border); padding:12px 14px; display:flex; align-items:center; gap:10px;">
+      <span style="width:32px; height:32px; flex:none; border-radius:var(--radius-full); background:var(--muted); color:var(--foreground); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;">MT</span>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:13px; font-weight:600; color:var(--sidebar-foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Minh Tran</div>
+        <div style="font-size:11.5px; color:var(--muted-foreground);">Admin</div>
+      </div>
+      <span style="color:var(--muted-foreground); display:flex;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+    <header style="height:60px; flex:none; border-bottom:1px solid var(--border); padding:0 24px; display:flex; align-items:center; justify-content:space-between; gap:16px; background:var(--background);">
+      <div>
+        <div style="font-family:var(--font-display); font-weight:700; font-size:20px; letter-spacing:-0.01em; line-height:1.1;">Traffic</div>
+        <div style="font-size:12px; color:var(--muted-foreground); margin-top:1px;">acme-corp.com · last 28 days</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:500; color:var(--success); background:color-mix(in oklch, var(--success) 14%, white); border:1px solid color-mix(in oklch, var(--success) 35%, white); padding:5px 10px;"><span style="width:6px; height:6px; border-radius:var(--radius-full); background:var(--success);"></span>GA4 connected</span>
+        <span style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:500; color:var(--success); background:color-mix(in oklch, var(--success) 14%, white); border:1px solid color-mix(in oklch, var(--success) 35%, white); padding:5px 10px;"><span style="width:6px; height:6px; border-radius:var(--radius-full); background:var(--success);"></span>Search Console</span>
+        <div style="display:flex; align-items:center; gap:8px; height:36px; padding:0 12px; border:1px solid var(--border); background:var(--background); font-size:13px; font-weight:500;">Last 28 days <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted-foreground);"><path d="m6 9 6 6 6-6"/></svg></div>
+      </div>
+    </header>
+
+    <main class="wpcc-scroll" style="flex:1; overflow:auto; background:var(--muted); padding:24px; display:flex; flex-direction:column; gap:16px;">
+      <!-- GA4 metric cards -->
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px;">
+        <div style="background:var(--card); border:1px solid var(--border); padding:18px;">
+          <div style="font-size:12.5px; font-weight:500; color:var(--muted-foreground);">Sessions</div>
+          <div style="font-family:var(--font-display); font-weight:700; font-size:28px; margin-top:8px; line-height:1;">24.1k</div>
+          <div style="display:flex; align-items:center; gap:5px; margin-top:8px; font-size:12px; font-weight:600; color:var(--success);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>+8.2%<span style="color:var(--muted-foreground); font-weight:500;"> vs prev</span></div>
+        </div>
+        <div style="background:var(--card); border:1px solid var(--border); padding:18px;">
+          <div style="font-size:12.5px; font-weight:500; color:var(--muted-foreground);">Users</div>
+          <div style="font-family:var(--font-display); font-weight:700; font-size:28px; margin-top:8px; line-height:1;">18.6k</div>
+          <div style="display:flex; align-items:center; gap:5px; margin-top:8px; font-size:12px; font-weight:600; color:var(--success);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>+5.1%<span style="color:var(--muted-foreground); font-weight:500;"> vs prev</span></div>
+        </div>
+        <div style="background:var(--card); border:1px solid var(--border); padding:18px;">
+          <div style="font-size:12.5px; font-weight:500; color:var(--muted-foreground);">Pageviews</div>
+          <div style="font-family:var(--font-display); font-weight:700; font-size:28px; margin-top:8px; line-height:1;">61.3k</div>
+          <div style="display:flex; align-items:center; gap:5px; margin-top:8px; font-size:12px; font-weight:600; color:var(--success);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>+11%<span style="color:var(--muted-foreground); font-weight:500;"> vs prev</span></div>
+        </div>
+        <div style="background:var(--card); border:1px solid var(--border); padding:18px;">
+          <div style="font-size:12.5px; font-weight:500; color:var(--muted-foreground);">Avg. session</div>
+          <div style="font-family:var(--font-display); font-weight:700; font-size:28px; margin-top:8px; line-height:1;">2m 14s</div>
+          <div style="display:flex; align-items:center; gap:5px; margin-top:8px; font-size:12px; font-weight:600; color:var(--danger);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/></svg>-3%<span style="color:var(--muted-foreground); font-weight:500;"> vs prev</span></div>
+        </div>
+      </div>
+
+      <!-- chart + top pages -->
+      <div style="display:grid; grid-template-columns:1.6fr 1fr; gap:16px; align-items:start;">
+        <div style="background:var(--card); border:1px solid var(--border); padding:18px; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-family:var(--font-display); font-weight:600; font-size:15px;">Sessions over time</span>
+            <span style="font-size:12px; color:var(--muted-foreground);">28 days</span>
+          </div>
+          <div style="display:flex; align-items:flex-end; gap:4px; margin-top:18px; height:200px;">
+            <sc-for list="{{ chart }}" as="h" hint-placeholder-count="28">
+              <span style="flex:1; height:{{ h }}; background:var(--chart-1);"></span>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="background:var(--card); border:1px solid var(--border); display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border);">
+            <span style="font-family:var(--font-display); font-weight:600; font-size:15px;">Top pages</span>
+            <span style="font-size:11px; color:var(--muted-foreground);">GA4</span>
+          </div>
+          <sc-for list="{{ pages }}" as="p" hint-placeholder-count="5">
+            <div style="display:flex; align-items:center; gap:12px; padding:12px 18px; border-bottom:1px solid var(--border);">
+              <span style="flex:1; font-family:var(--font-mono); font-size:12.5px; color:var(--foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.path }}</span>
+              <span style="font-size:13px; font-weight:600;">{{ p.views }}</span>
+              <span style="font-size:11.5px; color:var(--muted-foreground); width:38px; text-align:right;">{{ p.share }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- search console -->
+      <div style="background:var(--card); border:1px solid var(--border);">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border);">
+          <span style="font-family:var(--font-display); font-weight:600; font-size:15px;">Search Console</span>
+          <span style="font-size:12px; color:var(--muted-foreground);">last 28 days</span>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(4,1fr);">
+          <div style="padding:16px 18px; border-right:1px solid var(--border);"><div style="font-size:12px; color:var(--muted-foreground);">Clicks</div><div style="font-family:var(--font-display); font-weight:700; font-size:22px; margin-top:6px;">8,204</div></div>
+          <div style="padding:16px 18px; border-right:1px solid var(--border);"><div style="font-size:12px; color:var(--muted-foreground);">Impressions</div><div style="font-family:var(--font-display); font-weight:700; font-size:22px; margin-top:6px;">142k</div></div>
+          <div style="padding:16px 18px; border-right:1px solid var(--border);"><div style="font-size:12px; color:var(--muted-foreground);">Avg. CTR</div><div style="font-family:var(--font-display); font-weight:700; font-size:22px; margin-top:6px;">5.8%</div></div>
+          <div style="padding:16px 18px;"><div style="font-size:12px; color:var(--muted-foreground);">Avg. position</div><div style="font-family:var(--font-display); font-weight:700; font-size:22px; margin-top:6px;">12.4</div></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1440, &quot;height&quot;: 900}}">
+class Component extends DCLogic {
+  renderVals() {
+    const heights = [42, 55, 48, 62, 58, 70, 64, 78, 72, 66, 80, 74, 85, 79, 90, 84, 76, 88, 82, 95, 89, 81, 92, 86, 98, 91, 84, 96];
+    const chart = heights.map((h) => h + "%");
+    const pages = [
+      { path: "/", views: "12,408", share: "64%" },
+      { path: "/pricing", views: "3,102", share: "16%" },
+      { path: "/blog/wp-tips", views: "1,890", share: "10%" },
+      { path: "/contact", views: "964", share: "5%" },
+      { path: "/about", views: "612", share: "3%" },
+    ];
+    return { chart, pages };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+/* ============================================================
+   RADIUS — preset sets --radius: 0 (sharp, square corners).
+   Derived steps follow the shadcn convention but clamp at 0,
+   so the whole system reads as crisp rectangles. Circular
+   affordances (dots, avatars, switches) opt out with 50% / 9999px.
+   ============================================================ */
+
+:root {
+  /* --radius is defined in colors.css (preset). Steps derive from it. */
+  --radius-sm: max(0px, calc(var(--radius) - 2px));
+  --radius-md: max(0px, calc(var(--radius) - 1px));
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-full: 9999px;
+}

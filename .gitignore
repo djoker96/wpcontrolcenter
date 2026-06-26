@@ -31,6 +31,8 @@ pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+!.env.ci.example
 
 # typescript
 *.tsbuildinfo
@@ -40,4 +42,6 @@ next-env.d.ts
 playwright-report/
 test-results/
 
+# isolated feature worktrees
+.worktrees/
 

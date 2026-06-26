@@ -1,7 +1,7 @@
 import { Inject, Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { Queue } from 'bullmq';
-import { JobStatus, LogLevel } from '@wpcc/database';
+import { JobStatus, LogLevel, JobType } from '@wpcc/database';
 
 @Injectable()
 export class JobsService {
@@ -10,10 +10,42 @@ export class JobsService {
     @Inject('JOBS_QUEUE') private readonly jobsQueue: Queue,
   ) {}
 
-  async findAll() {
-    return this.prisma.job.findMany({
+  // Job types whose payloadJson may contain file paths (server-local paths).
+  private static readonly PATH_CARRYING_JOB_TYPES: ReadonlySet<string> = new Set([
+    JobType.UPLOAD_PLUGIN,
+    JobType.UPLOAD_THEME,
+  ]);
+
+  /**
+   * Strip sensitive server-local file paths from a job payload before exposing
+   * it to API consumers. The worker still receives full paths via the BullMQ
+   * job payload, which is not exposed here.
+   */
+  private static redactPayload(jobType: JobType, payload: Record<string, unknown>): Record<string, unknown> {
+    if (!payload || !JobsService.PATH_CARRYING_JOB_TYPES.has(jobType)) {
+      return payload;
+    }
+    const { filePath, ...safe } = payload;
+    if (filePath) {
+      safe.fileName = typeof filePath === 'string' ? filePath.replace(/^.*[\\/]/, '') : undefined;
+    }
+    return safe;
+  }
+
+  async findAll(siteId?: string, status?: JobStatus) {
+    const where: { siteId?: string; status?: JobStatus } = {};
+    if (siteId) where.siteId = siteId;
+    if (status) where.status = status;
+    const jobs = await this.prisma.job.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: { site: { select: { id: true, name: true, domain: true } } },
     });
+    return jobs.map((job) => ({
+      ...job,
+      payloadJson: JobsService.redactPayload(job.jobType as JobType, (job.payloadJson ?? {}) as Record<string, unknown>),
+    }));
   }
 
   async findOne(id: string) {
@@ -24,7 +56,10 @@ export class JobsService {
     if (!job) {
       throw new NotFoundException('Job not found');
     }
-    return job;
+    return {
+      ...job,
+      payloadJson: JobsService.redactPayload(job.jobType as JobType, (job.payloadJson ?? {}) as Record<string, unknown>),
+    };
   }
 
   async retry(jobId: string) {

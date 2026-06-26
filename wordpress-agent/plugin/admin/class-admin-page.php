@@ -12,7 +12,12 @@ class WPCC_Agent_Admin_Page {
     }
 
     public function handle_actions() {
-        if (!isset($_POST['wpcc_nonce']) || !wp_verify_nonce($_POST['wpcc_nonce'], 'wpcc_agent_action')) {
+        // Capability check is required in addition to the nonce — a nonce proves
+        // intent/origin, not authorization.
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        if (!isset($_POST['wpcc_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['wpcc_nonce'])), 'wpcc_agent_action')) {
             return;
         }
 
@@ -56,7 +61,13 @@ class WPCC_Agent_Admin_Page {
             wpcc_agent_update_option('connected', true);
             wpcc_agent_update_option('api_url', rtrim($api_url, '/'));
             wpcc_agent_update_option('site_id', $body['siteId']);
-            wpcc_agent_update_option('secret_key', $body['secretKey']);
+            if (defined('WPCC_SECRET_KEY') && WPCC_SECRET_KEY !== '') {
+                // The constant is already set in wp-config.php — prefer it.
+                // Adding an add_settings_error() notice is too early in the
+                // page lifecycle here; the key is stored regardless.
+            } else {
+                wpcc_agent_update_option('secret_key', $body['secretKey']);
+            }
 
             add_settings_error('wpcc_messages', 'wpcc_success', 'Connected successfully to WP Control Center!', 'updated');
         }

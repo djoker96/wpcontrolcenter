@@ -3,6 +3,7 @@ import { PrismaService } from '../database/prisma.service';
 import { decrypt } from '../../common/utils/crypto.utils';
 import { createHmac } from 'node:crypto';
 import { getAgentEncryptionKey } from '../../config/env';
+import { assertPublicUrl } from '@wpcc/shared';
 
 @Injectable()
 export class DiagnosticsService {
@@ -56,6 +57,7 @@ export class DiagnosticsService {
     const targetUrl = `${site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/php-logs`;
 
     try {
+      await assertPublicUrl(targetUrl); // SSRF guard
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -119,6 +121,7 @@ export class DiagnosticsService {
     const targetUrl = `${site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/diagnostics`;
 
     try {
+      await assertPublicUrl(targetUrl); // SSRF guard
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 

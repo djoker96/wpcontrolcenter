@@ -1,5 +1,5 @@
 import { PrismaClient, UserRole, EnvironmentType, ConnectionStatus, SiteStatus, JobStatus, JobType, JobTargetType, IncidentSeverity, IncidentStatus, IncidentType, NotificationChannelType, AnalyticsSource, AuditResult, LogLevel, IntegrationProvider, IntegrationStatus } from '@prisma/client';
-import { createHash, createCipheriv, randomBytes } from 'node:crypto';
+import { scryptSync, createCipheriv, createHmac, randomBytes } from 'node:crypto';
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
 
@@ -35,23 +35,59 @@ function encryptValue(value: string): string {
   return encrypt(value, encKey);
 }
 
-function hashPassword(password: string): string {
-  return createHash('sha256').update(password).digest('hex');
+function hashConnectionToken(token: string): string {
+  return createHmac('sha256', encKey).update(token).digest('hex');
 }
 
+function hashPassword(password: string): string {
+  // Use scrypt (same algorithm as crypto.utils.ts) instead of SHA-256
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+/**
+ * Resolve the seed admin password.
+ * - If SEED_ADMIN_PASSWORD is set, use it (useful for CI / repeatable deploys).
+ * - Otherwise generate a strong random password and print it once so the
+ *   operator can capture it from the deploy logs. This avoids shipping a
+ *   known default credential ("ChangeMe123!") to production.
+ */
+function resolveSeedPassword(): { password: string; generated: boolean } {
+  const fromEnv = process.env.SEED_ADMIN_PASSWORD;
+  if (fromEnv && fromEnv.length >= 12) {
+    return { password: fromEnv, generated: false };
+  }
+  return { password: randomBytes(18).toString('base64url'), generated: true };
+}
+
+let seededAdminPassword: { password: string; generated: boolean } | null = null;
+
 async function main(): Promise<void> {
+  seededAdminPassword = resolveSeedPassword();
   const admin = await prisma.user.upsert({
     where: { email: 'admin@example.com' },
-    update: {},
+    update: {
+      passwordHash: hashPassword(seededAdminPassword.password),
+      emailVerifiedAt: new Date(),
+      role: UserRole.SUPER_ADMIN,
+    },
     create: {
       email: 'admin@example.com',
-      passwordHash: hashPassword('ChangeMe123!'),
+      passwordHash: hashPassword(seededAdminPassword.password),
+      emailVerifiedAt: new Date(),
       fullName: 'System Administrator',
       role: UserRole.SUPER_ADMIN,
     },
   });
 
-  const googleAccount = await prisma.integrationAccount.create({
+  const isProd = process.env.NODE_ENV === 'production';
+
+  if (isProd) {
+    console.log(`Seed completed. Admin: ${admin.email}. Production mode: skipping demo data.`);
+  } else {
+    // ── Demo data (dev / CI only) ──────────────────────────
+    const googleAccount = await prisma.integrationAccount.create({
     data: {
       provider: IntegrationProvider.GOOGLE,
       accountEmail: 'analytics@example.com',
@@ -87,6 +123,7 @@ async function main(): Promise<void> {
           publicKey: 'demo-public-key',
           secretKeyEncrypted: encryptValue('demo-secret-key'),
           connectionTokenEncrypted: encryptValue('demo-connection-token'),
+          connectionTokenHash: hashConnectionToken('demo-connection-token'),
           lastRotatedAt: new Date(),
         },
       },
@@ -282,9 +319,21 @@ async function main(): Promise<void> {
       phpIniContent: 'memory_limit=256M',
       createdByUserId: admin.id,
     },
-  });
+    }); // end maintenance snapshot — last demo data item
 
-  console.log(`Seed completed. Admin: ${admin.email}, Site: ${site.domain}`);
+    console.log(`Seed completed. Admin: ${admin.email}, Site: ${site.domain}`);
+  } // end if (!isProd)
+
+  if (seededAdminPassword?.generated) {
+    console.log('');
+    console.log('========================================================');
+    console.log('  GENERATED ADMIN PASSWORD (save this now, shown once):');
+    console.log(`  ${seededAdminPassword.password}`);
+    console.log('========================================================');
+    console.log('  Set SEED_ADMIN_PASSWORD in the environment to make this');
+    console.log('  deterministic, or change it immediately after first login.');
+    console.log('========================================================');
+  }
 }
 
 main()
