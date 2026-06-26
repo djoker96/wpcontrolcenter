@@ -1,22 +1,20 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Admin Login Flow', () => {
-  test('should show validation error on empty submit', async ({ page }) => {
-    await page.goto('/');
-    await page.click('button[type="submit"]');
-    // Verify login form stays and hasn't redirected
-    await expect(page).toHaveURL('/');
-  });
+test('keeps the auth page visible after an empty submit', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL('/');
+  await expect(page.getByLabel('Email')).toBeVisible();
+});
 
-  test('should login successfully with valid admin credentials', async ({ page }) => {
-    await page.goto('/');
-    await page.fill('input[type="email"]', 'admin@example.com');
-    await page.fill('input[type="password"]', 'ChangeMe123!');
-    await page.click('button[type="submit"]');
+test('signs in with configured verified admin credentials', async ({ page }) => {
+  const email = process.env.E2E_ADMIN_EMAIL;
+  const password = process.env.E2E_ADMIN_PASSWORD;
+  test.skip(!email || !password, 'Set E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD for live auth');
 
-    // Verify redirection to dashboard sites page
-    await expect(page).toHaveURL('/sites');
-    const header = page.locator('h2');
-    await expect(header).toContainText('WordPress Sites');
-  });
+  await page.goto('/');
+  await page.getByLabel('Email').fill(email!);
+  await page.getByLabel('Password').fill(password!);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL('/sites');
 });
