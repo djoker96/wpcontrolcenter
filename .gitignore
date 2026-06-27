@@ -10,6 +10,9 @@ node_modules/
 
 # testing
 /coverage
+apps/api/test/**/*.d.ts
+apps/api/test/**/*.js
+apps/api/test/**/*.js.map
 
 # next.js
 .next/
@@ -22,6 +25,7 @@ dist/
 # misc
 .DS_Store
 *.pem
+.worktrees/
 
 # debug
 npm-debug.log*
@@ -31,6 +35,7 @@ pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.production.example
 
 # typescript
 *.tsbuildinfo
@@ -39,5 +44,3 @@ next-env.d.ts
 # playwright
 playwright-report/
 test-results/
-
-
