@@ -41,6 +41,13 @@ function getActionSlug(jobType: string): string {
   }
 }
 
+function assertSafeBackupFilename(filename: string): string {
+  if (!filename || filename.includes('\0') || filename === '.' || filename === '..' || path.basename(filename) !== filename) {
+    throw new Error('Agent returned an invalid backup filename');
+  }
+  return filename;
+}
+
 async function logToJob(jobId: string, level: LogLevel, message: string, context?: any) {
   try {
     await prisma.jobLog.create({
@@ -241,7 +248,7 @@ async function handleCreateBackupJob(jobId: string) {
       throw new Error(json.message || 'Backup failed on WordPress Agent');
     }
 
-    const filename = json.filename;
+    const filename = assertSafeBackupFilename(json.filename);
 
     // Now download the backup file from Agent
     const downloadPath = `/wpcc/v1/execute/download-backup`;
@@ -267,7 +274,10 @@ async function handleCreateBackupJob(jobId: string) {
       fs.mkdirSync(storageDir, { recursive: true });
     }
     
-    const fileDest = path.join(storageDir, filename);
+    const fileDest = path.resolve(storageDir, filename);
+    if (!fileDest.startsWith(`${storageDir}${path.sep}`)) {
+      throw new Error('Backup destination escaped backend storage');
+    }
     const arrayBuffer = await fileRes.arrayBuffer();
     fs.writeFileSync(fileDest, Buffer.from(arrayBuffer));
 
@@ -324,7 +334,11 @@ async function handleRestoreBackupJob(jobId: string) {
   await prisma.job.update({ where: { id: jobId }, data: { status: 'RUNNING', startedAt: new Date() } });
 
   const storageDir = path.resolve(__dirname, '../../storage/backups', job.siteId);
-  const filePath = path.join(storageDir, backup.filename);
+  const filename = assertSafeBackupFilename(backup.filename);
+  const filePath = path.resolve(storageDir, filename);
+  if (!filePath.startsWith(`${storageDir}${path.sep}`)) {
+    throw new Error('Backup file escaped backend storage');
+  }
 
   if (!fs.existsSync(filePath)) {
     throw new Error('Backup file is missing from backend storage');
@@ -337,7 +351,7 @@ async function handleRestoreBackupJob(jobId: string) {
     // 1. Upload file to agent
     const fileData = fs.readFileSync(filePath);
     const uploadPath = '/wpcc/v1/execute/upload-backup';
-    const uploadQuery = `?filename=${encodeURIComponent(backup.filename)}`;
+    const uploadQuery = `?filename=${encodeURIComponent(filename)}`;
     // For binary body, hash/HMAC is calculated over raw bytes
     const messageBytes = Buffer.concat([
       Buffer.from(`POST|${uploadPath}|${timestamp}|`),
@@ -362,7 +376,7 @@ async function handleRestoreBackupJob(jobId: string) {
 
     // 2. Trigger restore on agent
     const restoreTarget = `${job.site.siteUrl.replace(/\/$/, '')}/wp-json/wpcc/v1/execute/restore-backup`;
-    const restoreBody = JSON.stringify({ filename: backup.filename });
+    const restoreBody = JSON.stringify({ filename });
     const restoreMsg = `POST|/wpcc/v1/execute/restore-backup|${timestamp}|${restoreBody}`;
     const restoreSignature = createHmac('sha256', secretKey).update(restoreMsg).digest('hex');
 

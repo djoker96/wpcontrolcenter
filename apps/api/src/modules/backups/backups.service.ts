@@ -58,7 +58,7 @@ export class BackupsService {
 
   async restoreBackupJob(siteId: string, backupId: string, userId: string) {
     const backup = await this.prisma.siteBackup.findUnique({ where: { id: backupId } });
-    if (!backup) throw new NotFoundException('Backup not found');
+    if (!backup || backup.siteId !== siteId) throw new NotFoundException('Backup not found');
 
     const job = await this.prisma.job.create({
       data: {
@@ -81,11 +81,9 @@ export class BackupsService {
 
   async deleteBackup(siteId: string, backupId: string) {
     const backup = await this.prisma.siteBackup.findUnique({ where: { id: backupId } });
-    if (!backup) throw new NotFoundException('Backup not found');
+    if (!backup || backup.siteId !== siteId) throw new NotFoundException('Backup not found');
 
-    // Remove from disk
-    const storageDir = path.resolve(__dirname, '../../../../storage/backups', siteId);
-    const filePath = path.join(storageDir, backup.filename);
+    const filePath = this.resolveBackupFilePath(siteId, backup.filename);
     if (fs.existsSync(filePath)) {
       try {
         fs.unlinkSync(filePath);
@@ -100,13 +98,21 @@ export class BackupsService {
 
   async getBackupFilePath(siteId: string, backupId: string) {
     const backup = await this.prisma.siteBackup.findUnique({ where: { id: backupId } });
-    if (!backup) throw new NotFoundException('Backup not found');
+    if (!backup || backup.siteId !== siteId) throw new NotFoundException('Backup not found');
 
-    const storageDir = path.resolve(__dirname, '../../../../storage/backups', siteId);
-    const filePath = path.join(storageDir, backup.filename);
+    const filePath = this.resolveBackupFilePath(siteId, backup.filename);
     if (!fs.existsSync(filePath)) {
       throw new NotFoundException('Backup file not found on disk');
     }
     return { filePath, filename: backup.filename };
+  }
+
+  private resolveBackupFilePath(siteId: string, filename: string): string {
+    const storageDir = path.resolve(__dirname, '../../../../storage/backups', siteId);
+    const filePath = path.resolve(storageDir, filename);
+    if (!filePath.startsWith(`${storageDir}${path.sep}`)) {
+      throw new NotFoundException('Backup file not found on disk');
+    }
+    return filePath;
   }
 }

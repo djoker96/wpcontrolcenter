@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-import { API_URL } from "@/lib/api";
+import { API_URL, apiFetch } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,7 +26,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
+      const response = await apiFetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -40,7 +40,7 @@ export default function LoginPage() {
       }
 
       const data = await response.json();
-      localStorage.setItem("wpcc_token", data.accessToken);
+      localStorage.setItem("wpcc_token", "cookie-session");
       localStorage.setItem("wpcc_user", JSON.stringify(data.user || { email }));
       router.push("/sites");
     } catch (err) {

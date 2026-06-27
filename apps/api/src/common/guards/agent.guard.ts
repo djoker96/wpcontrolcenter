@@ -55,7 +55,7 @@ export class AgentGuard implements CanActivate {
     const message = `${method}|${path}|${timestamp}|${bodyStr}`;
     const expectedSignature = crypto.createHmac('sha256', secretKey).update(message).digest('hex');
 
-    if (signature !== expectedSignature) {
+    if (!safeCompareHex(signature, expectedSignature)) {
       throw new UnauthorizedException('Invalid request signature');
     }
 
@@ -63,4 +63,12 @@ export class AgentGuard implements CanActivate {
     request.siteId = siteId;
     return true;
   }
+}
+
+function safeCompareHex(received: string, expected: string): boolean {
+  if (!/^[a-f0-9]+$/i.test(received) || received.length !== expected.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(Buffer.from(received, 'hex'), Buffer.from(expected, 'hex'));
 }

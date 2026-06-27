@@ -4,7 +4,7 @@ import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { API_URL } from "@/lib/api";
+import { API_URL, apiFetch } from "@/lib/api";
 
 interface SiteOverview {
   name: string;
@@ -227,7 +227,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setMappingLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/integrations/sites/${id}/map`, {
+      const res = await apiFetch(`${API_URL}/integrations/sites/${id}/map`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -260,7 +260,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       const token = localStorage.getItem("wpcc_token");
       if (!token) return;
       try {
-        const res = await fetch(`${API_URL}/integrations/google/properties?accountId=${selectedAccountId}`, {
+        const res = await apiFetch(`${API_URL}/integrations/google/properties?accountId=${selectedAccountId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -280,7 +280,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     if (!token) return;
 
     try {
-      const accountsRes = await fetch(`${API_URL}/integrations`, {
+      const accountsRes = await apiFetch(`${API_URL}/integrations`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (accountsRes.ok) {
@@ -297,7 +297,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
     if (overviewData?.ga4PropertyId || overviewData?.gscSiteUrl) {
       try {
-        const analyticsRes = await fetch(`${API_URL}/analytics/sites/${id}?range=${range}`, {
+        const analyticsRes = await apiFetch(`${API_URL}/analytics/sites/${id}?range=${range}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (analyticsRes.ok) {
@@ -326,7 +326,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
     setLoadingBackups(true);
     try {
-      const res = await fetch(`${API_URL}/sites/${id}/backups`, {
+      const res = await apiFetch(`${API_URL}/sites/${id}/backups`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to fetch backups");
@@ -345,7 +345,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
     setCreatingBackup(true);
     try {
-      const res = await fetch(`${API_URL}/sites/${id}/backups`, {
+      const res = await apiFetch(`${API_URL}/sites/${id}/backups`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -376,7 +376,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     if (!token) return;
 
     try {
-      const res = await fetch(`${API_URL}/sites/${id}/backups/${backupId}/restore`, {
+      const res = await apiFetch(`${API_URL}/sites/${id}/backups/${backupId}/restore`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -400,7 +400,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     if (!token) return;
 
     try {
-      const res = await fetch(`${API_URL}/sites/${id}/backups/${backupId}`, {
+      const res = await apiFetch(`${API_URL}/sites/${id}/backups/${backupId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -420,7 +420,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     const token = localStorage.getItem("wpcc_token");
     if (!token) return;
     try {
-      const res = await fetch(`${API_URL}/sites/${id}/backups/${backupId}/download`, {
+      const res = await apiFetch(`${API_URL}/sites/${id}/backups/${backupId}/download`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to download backup");
@@ -446,7 +446,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setLoadingDiagnostics(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/sites/${id}/diagnostics`, {
+      const res = await apiFetch(`${API_URL}/sites/${id}/diagnostics`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to load site diagnostics");
@@ -467,7 +467,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setRefreshingDiagnostics(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/sites/${id}/diagnostics/refresh`, {
+      const res = await apiFetch(`${API_URL}/sites/${id}/diagnostics/refresh`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -491,7 +491,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
     setLoadingPhpLogs(true);
     try {
-      const res = await fetch(`${API_URL}/sites/${id}/diagnostics/php-logs?lines=${linesNum}`, {
+      const res = await apiFetch(`${API_URL}/sites/${id}/diagnostics/php-logs?lines=${linesNum}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -514,7 +514,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
     setLoadingPerformance(true);
     try {
-      const res = await fetch(`${API_URL}/sites/${id}/performance`, {
+      const res = await apiFetch(`${API_URL}/sites/${id}/performance`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -535,7 +535,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setRunningSpeedTest(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/sites/${id}/performance/refresh`, {
+      const res = await apiFetch(`${API_URL}/sites/${id}/performance/refresh`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -584,7 +584,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setActionRunning(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/sites/${id}/actions/${action}`, {
+      const res = await apiFetch(`${API_URL}/sites/${id}/actions/${action}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -620,7 +620,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
     try {
       // Fetch overview
-      const overviewRes = await fetch(`${API_URL}/sites/${id}/overview`, {
+      const overviewRes = await apiFetch(`${API_URL}/sites/${id}/overview`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!overviewRes.ok) throw new Error("Failed to load overview data");
@@ -628,7 +628,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       setOverviewData(overviewJson.summary);
 
       // Fetch plugins
-      const pluginsRes = await fetch(`${API_URL}/sites/${id}/plugins`, {
+      const pluginsRes = await apiFetch(`${API_URL}/sites/${id}/plugins`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (pluginsRes.ok) {
@@ -637,7 +637,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       // Fetch themes
-      const themesRes = await fetch(`${API_URL}/sites/${id}/themes`, {
+      const themesRes = await apiFetch(`${API_URL}/sites/${id}/themes`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (themesRes.ok) {
@@ -646,7 +646,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       // Fetch core
-      const coreRes = await fetch(`${API_URL}/sites/${id}/core`, {
+      const coreRes = await apiFetch(`${API_URL}/sites/${id}/core`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (coreRes.ok) {
@@ -655,7 +655,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       // Fetch Uptime
-      const uptimeRes = await fetch(`${API_URL}/sites/${id}/uptime`, {
+      const uptimeRes = await apiFetch(`${API_URL}/sites/${id}/uptime`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (uptimeRes.ok) {
@@ -665,7 +665,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       // Fetch Incidents
-      const incidentsRes = await fetch(`${API_URL}/sites/${id}/incidents`, {
+      const incidentsRes = await apiFetch(`${API_URL}/sites/${id}/incidents`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (incidentsRes.ok) {
@@ -696,7 +696,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setError("");
 
     try {
-      const response = await fetch(`${API_URL}/sites/${id}/resync`, {
+      const response = await apiFetch(`${API_URL}/sites/${id}/resync`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { API_URL } from "@/lib/api";
+import { API_URL, apiFetch } from "@/lib/api";
 
 interface NotificationChannel {
   id: string;
@@ -52,7 +52,7 @@ function NotificationsContent() {
       setError("");
       
       // Fetch Channels
-      const channelsRes = await fetch(`${API_URL}/notifications/channels`, {
+      const channelsRes = await apiFetch(`${API_URL}/notifications/channels`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!channelsRes.ok) throw new Error("Failed to load notification channels");
@@ -60,7 +60,7 @@ function NotificationsContent() {
       setChannels(channelsJson.data || []);
 
       // Fetch Events Log
-      const eventsRes = await fetch(`${API_URL}/notifications/events`, {
+      const eventsRes = await apiFetch(`${API_URL}/notifications/events`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (eventsRes.ok) {
@@ -90,7 +90,7 @@ function NotificationsContent() {
     setSuccessMsg("");
 
     try {
-      const res = await fetch(`${API_URL}/notifications/channels`, {
+      const res = await apiFetch(`${API_URL}/notifications/channels`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -129,7 +129,7 @@ function NotificationsContent() {
     setSuccessMsg("");
 
     try {
-      const res = await fetch(`${API_URL}/notifications/channels/${id}`, {
+      const res = await apiFetch(`${API_URL}/notifications/channels/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

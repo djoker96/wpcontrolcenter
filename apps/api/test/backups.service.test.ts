@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { NotFoundException } from '@nestjs/common';
 import { BackupsService } from '../src/modules/backups/backups.service';
 import { BackupType, BackupStatus, JobType, JobTargetType } from '@wpcc/database';
 
@@ -107,4 +108,34 @@ test('restoreBackupJob creates job record and enqueues BullMQ job', async () => 
     { jobId: 'job_2' },
     { jobId: 'job_2' },
   ]);
+});
+
+test('restoreBackupJob rejects backups from a different site', async () => {
+  const prisma = {
+    siteBackup: {
+      findUnique: async () => ({ id: 'backup_1', siteId: 'site_other' }),
+    },
+  };
+  const queue = { add: async () => undefined };
+  const service = new BackupsService(prisma as any, queue as any);
+
+  await assert.rejects(
+    () => service.restoreBackupJob('site_1', 'backup_1', 'user_1'),
+    NotFoundException,
+  );
+});
+
+test('getBackupFilePath rejects filenames that escape site backup storage', async () => {
+  const prisma = {
+    siteBackup: {
+      findUnique: async () => ({ id: 'backup_1', siteId: 'site_1', filename: '../../.env' }),
+    },
+  };
+  const queue = { add: async () => undefined };
+  const service = new BackupsService(prisma as any, queue as any);
+
+  await assert.rejects(
+    () => service.getBackupFilePath('site_1', 'backup_1'),
+    NotFoundException,
+  );
 });

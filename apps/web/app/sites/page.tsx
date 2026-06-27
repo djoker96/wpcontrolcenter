@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { API_URL } from "@/lib/api";
+import { API_URL, apiFetch } from "@/lib/api";
 
 interface Site {
   id: string;
@@ -41,7 +41,7 @@ export default function SitesPage() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/sites`, {
+      const response = await apiFetch(`${API_URL}/sites`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -80,7 +80,7 @@ export default function SitesPage() {
 
     const token = localStorage.getItem("wpcc_token");
     try {
-      const response = await fetch(`${API_URL}/sites`, {
+      const response = await apiFetch(`${API_URL}/sites`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -114,7 +114,8 @@ export default function SitesPage() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await apiFetch(`${API_URL}/auth/logout`, { method: "POST" }).catch(() => undefined);
     localStorage.removeItem("wpcc_token");
     localStorage.removeItem("wpcc_user");
     router.push("/");

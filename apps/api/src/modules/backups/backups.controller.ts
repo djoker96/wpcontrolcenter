@@ -53,8 +53,12 @@ export class BackupsController {
     @Res() res: Response,
   ) {
     const { filePath, filename } = await this.backupsService.getBackupFilePath(siteId, id);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${sanitizeHeaderFilename(filename)}"`);
     res.setHeader('Content-Type', 'application/octet-stream');
     res.sendFile(filePath);
   }
+}
+
+function sanitizeHeaderFilename(filename: string): string {
+  return filename.replace(/[\r\n"]/g, '_');
 }
