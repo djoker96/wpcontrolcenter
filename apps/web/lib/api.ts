@@ -1,4 +1,4 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3003/api";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 export function apiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   return fetch(input, {
