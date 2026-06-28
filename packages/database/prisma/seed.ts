@@ -39,10 +39,29 @@ function hashPassword(password: string): string {
   return createHash('sha256').update(password).digest('hex');
 }
 
+function isProductionSeed(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+function getSeedAdmin() {
+  const email = process.env.SEED_ADMIN_EMAIL || 'admin@example.com';
+  const password = process.env.SEED_ADMIN_PASSWORD;
+
+  if (isProductionSeed() && !password) {
+    throw new Error('SEED_ADMIN_PASSWORD is required when seeding in production');
+  }
+
+  return {
+    email,
+    password: password || 'ChangeMe123!',
+  };
+}
+
 async function main(): Promise<void> {
-  const adminPasswordHash = hashPassword('ChangeMe123!');
+  const seedAdmin = getSeedAdmin();
+  const adminPasswordHash = hashPassword(seedAdmin.password);
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@example.com' },
+    where: { email: seedAdmin.email },
     update: {
       passwordHash: adminPasswordHash,
       fullName: 'System Administrator',
@@ -50,7 +69,7 @@ async function main(): Promise<void> {
       isActive: true,
     },
     create: {
-      email: 'admin@example.com',
+      email: seedAdmin.email,
       passwordHash: adminPasswordHash,
       fullName: 'System Administrator',
       role: UserRole.SUPER_ADMIN,

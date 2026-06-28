@@ -133,7 +133,11 @@ nano .env
 | `POSTGRES_PASSWORD` | Mật khẩu mạnh, ít nhất 16 ký tự; dùng ký tự URL-safe như chữ, số, `-`, `_` |
 | `JWT_SECRET` | `openssl rand -hex 32` để tạo |
 | `AGENT_ENCRYPTION_KEY` | `openssl rand -hex 32` để tạo |
+| `SEED_ADMIN_EMAIL` | Email admin dùng khi chạy seed staging |
+| `SEED_ADMIN_PASSWORD` | Mật khẩu admin mạnh, bắt buộc khi seed bằng image production |
+| `RUN_SEED` | Đặt `true` cho lần seed staging đầu tiên; đặt lại `false` sau khi seed xong nếu không muốn reset mật khẩu admin ở lần deploy sau |
 | `NEXT_PUBLIC_API_URL` | `https://domain-cua-ban.com/api` |
+| `CORS_ORIGIN` | Origin frontend, ví dụ `https://domain-cua-ban.com` |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Lấy ở bước V |
 
 ---
@@ -161,6 +165,12 @@ sleep 10
 
 # Chạy Prisma migration
 docker compose -f docker-compose.prod.yml --env-file .env run --rm api sh -c "cd packages/database && npx prisma migrate deploy"
+```
+
+Nếu cần seed dữ liệu staging và tài khoản admin, đặt `RUN_SEED=true` trong `.env`, sau đó chạy:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env run --rm api sh -c "cd packages/database && npm run seed"
 ```
 
 ### Bước 7: Khởi động Toàn Bộ Hệ Thống
@@ -251,30 +261,10 @@ Connection registered
 
 ### Tạo User Admin Đầu Tiên
 
-Sau khi deploy, cần tạo user admin để đăng nhập:
+Seed script dùng `SEED_ADMIN_EMAIL` và `SEED_ADMIN_PASSWORD` trong `.env` để tạo hoặc cập nhật tài khoản `SUPER_ADMIN`:
 
 ```bash
-# Chạy seed script trong container
-docker compose -f docker-compose.prod.yml --env-file .env exec api npx ts-node -e "
-  const { PrismaClient } = require('@prisma/client');
-  const prisma = new PrismaClient();
-  async function main() {
-    await prisma.user.create({
-      data: {
-        email: 'admin@domain.com',
-        passwordHash: '\$2b\$10\$...',  // BCrypt hash của mật khẩu
-        name: 'Admin',
-        role: 'SUPER_ADMIN'
-      }
-    });
-  }
-"
-```
-
-Hoặc dùng seed script có sẵn:
-
-```bash
-docker compose -f docker-compose.prod.yml --env-file .env run --rm api sh -c "cd packages/database && npx prisma db seed"
+docker compose -f docker-compose.prod.yml --env-file .env run --rm api sh -c "cd packages/database && npm run seed"
 ```
 
 ### Backup Database
