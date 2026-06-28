@@ -112,7 +112,7 @@ jobs:
         run: |
           echo "Waiting for API login to be ready through Nginx..."
           for attempt in {1..30}; do
-            if response=$(curl -fsS -X POST http://localhost/api/auth/login \
+            if response=$(curl -fsS --connect-timeout 2 --max-time 5 -X POST http://localhost/api/auth/login \
               -H "Content-Type: application/json" \
               --data '{"email":"admin@example.com","password":"ChangeMe123!"}'); then
               if printf '%s' "$response" | node -e 'const chunks=[]; process.stdin.on("data", c=>chunks.push(c)); process.stdin.on("end",()=>{ const body=Buffer.concat(chunks).toString(); const parsed=JSON.parse(body); if (parsed.user?.email !== "admin@example.com") throw new Error(body); });'; then
