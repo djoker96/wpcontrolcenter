@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const shouldStartWebServer = process.env.PLAYWRIGHT_SKIP_WEB_SERVER !== '1';
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -22,10 +24,12 @@ export default defineConfig({
       use: { ...devices['Desktop Firefox'] },
     },
   ],
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5001',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  webServer: shouldStartWebServer
+    ? {
+        command: 'npm run dev',
+        url: 'http://localhost:5001',
+        reuseExistingServer: !process.env.CI,
+        timeout: 120 * 1000,
+      }
+    : undefined,
 });

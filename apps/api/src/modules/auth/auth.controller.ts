@@ -16,7 +16,7 @@ export class AuthController {
     const result = await this.authService.login(payload);
     response.cookie('wpcc_token', result.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: shouldUseSecureCookies(),
       sameSite: 'lax',
       path: '/',
       maxAge: 24 * 60 * 60 * 1000,
@@ -28,7 +28,7 @@ export class AuthController {
   logout(@Res({ passthrough: true }) response: Response) {
     response.clearCookie('wpcc_token', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: shouldUseSecureCookies(),
       sameSite: 'lax',
       path: '/',
     });
@@ -50,4 +50,11 @@ export class AuthController {
   async me(@CurrentUser() user: any) {
     return this.authService.me(user.id);
   }
+}
+
+function shouldUseSecureCookies(): boolean {
+  if (process.env.COOKIE_SECURE !== undefined) {
+    return process.env.COOKIE_SECURE === 'true';
+  }
+  return process.env.NODE_ENV === 'production';
 }

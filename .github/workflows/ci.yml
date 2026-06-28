@@ -67,6 +67,7 @@ jobs:
           JWT_EXPIRES_IN=1d
           AGENT_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
           NEXT_PUBLIC_API_URL=/api
+          COOKIE_SECURE=false
           CLOUDFLARE_TUNNEL_TOKEN=dummy-token-for-ci
           EOF
 
@@ -107,14 +108,42 @@ jobs:
           timeout 60s sh -c 'until curl -s http://localhost > /dev/null; do echo "Still waiting..."; sleep 2; done'
           echo "Nginx Gateway is online!"
 
+      - name: Verify API Login Through Nginx
+        run: |
+          echo "Waiting for API login to be ready through Nginx..."
+          for attempt in {1..30}; do
+            if response=$(curl -fsS -X POST http://localhost/api/auth/login \
+              -H "Content-Type: application/json" \
+              --data '{"email":"admin@example.com","password":"ChangeMe123!"}'); then
+              if printf '%s' "$response" | node -e 'const chunks=[]; process.stdin.on("data", c=>chunks.push(c)); process.stdin.on("end",()=>{ const body=Buffer.concat(chunks).toString(); const parsed=JSON.parse(body); if (parsed.user?.email !== "admin@example.com") throw new Error(body); });'; then
+                echo "API login is ready!"
+                exit 0
+              fi
+            fi
+
+            echo "API login not ready yet (attempt ${attempt}/30)..."
+            docker compose --env-file .env.ci -f docker-compose.prod.yml -f docker-compose.ci.yml ps
+            docker compose --env-file .env.ci -f docker-compose.prod.yml -f docker-compose.ci.yml logs api --tail=80
+            sleep 3
+          done
+
+          echo "API login did not become ready in time."
+          exit 1
+
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium firefox
         working-directory: apps/web
 
       - name: Run Playwright E2E Tests
         run: |
-          BASE_URL=http://localhost npx playwright test
+          PLAYWRIGHT_SKIP_WEB_SERVER=1 BASE_URL=http://localhost npx playwright test
         working-directory: apps/web
+
+      - name: Dump Docker Logs on Failure
+        if: failure() && hashFiles('.env.ci') != ''
+        run: |
+          docker compose --env-file .env.ci -f docker-compose.prod.yml -f docker-compose.ci.yml ps
+          docker compose --env-file .env.ci -f docker-compose.prod.yml -f docker-compose.ci.yml logs api web nginx --tail=200
 
       - name: Stop Production Stack
         if: always() && hashFiles('.env.ci') != ''

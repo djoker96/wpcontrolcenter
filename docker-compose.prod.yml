@@ -44,6 +44,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
       AGENT_ENCRYPTION_KEY: ${AGENT_ENCRYPTION_KEY:?AGENT_ENCRYPTION_KEY is required}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
     depends_on:
       postgres:
         condition: service_healthy
