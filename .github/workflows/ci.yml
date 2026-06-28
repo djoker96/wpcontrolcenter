@@ -26,6 +26,11 @@ jobs:
       - name: Run Prisma Client Generation
         run: npx prisma generate --schema=packages/database/prisma/schema.prisma
 
+      - name: Build shared workspace packages
+        run: |
+          npm run build -w packages/shared
+          npm run build -w packages/database
+
       - name: Run Linter
         run: npm run lint --workspaces --if-present
 
@@ -52,16 +57,46 @@ jobs:
       - name: Run Monorepo Build Verification
         run: npm run build:all
 
+      - name: Create CI environment file
+        run: |
+          cat > .env.ci <<'EOF'
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=ci-postgres-password
+          POSTGRES_DB=wp_control_center
+          JWT_SECRET=ci-jwt-secret-for-github-actions-only-change-not-needed
+          JWT_EXPIRES_IN=1d
+          AGENT_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
+          NEXT_PUBLIC_API_URL=http://localhost/api
+          CLOUDFLARE_TUNNEL_TOKEN=dummy-token-for-ci
+          EOF
+
+      - name: Create CI Docker Compose override
+        run: |
+          cat > docker-compose.ci.yml <<'YAML'
+          services:
+            nginx:
+              ports:
+                - "80:80"
+          YAML
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker Stack
         run: |
-          docker compose -f docker-compose.prod.yml build
+          docker compose --env-file .env.ci -f docker-compose.prod.yml -f docker-compose.ci.yml build
+
+      - name: Start Database Services
+        run: |
+          docker compose --env-file .env.ci -f docker-compose.prod.yml -f docker-compose.ci.yml up -d postgres redis
+
+      - name: Run Database Migrations and Seed
+        run: |
+          docker compose --env-file .env.ci -f docker-compose.prod.yml -f docker-compose.ci.yml run --rm api sh -c "cd packages/database && npx prisma migrate deploy && npm run seed"
 
       - name: Start Production Stack
         run: |
-          docker compose -f docker-compose.prod.yml up -d
+          docker compose --env-file .env.ci -f docker-compose.prod.yml -f docker-compose.ci.yml up -d --scale cloudflared=0
 
       - name: Wait for Nginx Gateway (Port 80)
         run: |
@@ -81,7 +116,7 @@ jobs:
       - name: Stop Production Stack
         if: always()
         run: |
-          docker compose -f docker-compose.prod.yml down -v
+          docker compose --env-file .env.ci -f docker-compose.prod.yml -f docker-compose.ci.yml down -v
 
       - name: Upload Playwright Report
         uses: actions/upload-artifact@v4
