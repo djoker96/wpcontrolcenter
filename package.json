@@ -13,5 +13,8 @@
     "db:generate": "npm run generate -w packages/database",
     "db:migrate": "npm run migrate:dev -w packages/database",
     "db:seed": "npm run seed -w packages/database"
+  },
+  "overrides": {
+    "lodash": "^4.18.1"
   }
 }
