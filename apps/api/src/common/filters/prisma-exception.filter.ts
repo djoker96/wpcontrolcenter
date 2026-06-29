@@ -1,12 +1,17 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpStatus } from '@nestjs/common';
 import { Prisma } from '@wpcc/database';
-import { Response } from 'express';
+
+type ErrorReply = {
+  status(status: number): {
+    send(payload: unknown): unknown;
+  };
+};
 
 @Catch(Prisma.PrismaClientKnownRequestError)
 export class PrismaExceptionFilter implements ExceptionFilter {
   catch(exception: Prisma.PrismaClientKnownRequestError, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const response = ctx.getResponse<Response>();
+    const response = ctx.getResponse<ErrorReply>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = exception.message || 'Database error';
@@ -25,7 +30,7 @@ export class PrismaExceptionFilter implements ExceptionFilter {
         break;
     }
 
-    response.status(status).json({
+    response.status(status).send({
       statusCode: status,
       message,
       error: status === HttpStatus.CONFLICT ? 'Conflict' : status === HttpStatus.NOT_FOUND ? 'Not Found' : 'Internal Server Error',

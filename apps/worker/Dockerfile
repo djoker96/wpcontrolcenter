@@ -11,6 +11,7 @@ RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
 RUN npm run build -w packages/database
 RUN npm run build -w packages/shared
 RUN npm run build -w apps/worker
+RUN npm prune --omit=dev --workspaces
 
 FROM node:20-alpine AS runner
 WORKDIR /app

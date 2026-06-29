@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Delete, Param, Body, UseGuards, Res } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, UseGuards, Res, StreamableFile } from '@nestjs/common';
+import { createReadStream } from 'node:fs';
 import { BackupsService } from './backups.service';
 import { CreateBackupDto } from './dto/create-backup.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
@@ -6,7 +7,10 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '@wpcc/database';
-import { Response } from 'express';
+
+type HeaderReply = {
+  header(name: string, value: string): unknown;
+};
 
 @Controller('sites/:siteId/backups')
 @UseGuards(AuthGuard, RolesGuard)
@@ -50,12 +54,12 @@ export class BackupsController {
   async downloadBackup(
     @Param('siteId') siteId: string,
     @Param('id') id: string,
-    @Res() res: Response,
-  ) {
+    @Res({ passthrough: true }) res: HeaderReply,
+  ): Promise<StreamableFile> {
     const { filePath, filename } = await this.backupsService.getBackupFilePath(siteId, id);
-    res.setHeader('Content-Disposition', `attachment; filename="${sanitizeHeaderFilename(filename)}"`);
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.sendFile(filePath);
+    res.header('Content-Disposition', `attachment; filename="${sanitizeHeaderFilename(filename)}"`);
+    res.header('Content-Type', 'application/octet-stream');
+    return new StreamableFile(createReadStream(filePath));
   }
 }
 

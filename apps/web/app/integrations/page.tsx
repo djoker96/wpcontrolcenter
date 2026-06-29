@@ -108,7 +108,7 @@ function IntegrationsContent() {
       if (!res.ok) throw new Error("Failed to generate connect URL");
       const json = await res.json();
       if (json.authorizationUrl) {
-        window.location.href = json.authorizationUrl;
+        window.open(json.authorizationUrl, "_self");
       } else {
         throw new Error("Missing authorization URL");
       }

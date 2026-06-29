@@ -5,33 +5,37 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Response } from 'express';
+
+type HeaderReply = {
+  header(name: string, value: string): unknown;
+};
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  async login(@Body() payload: LoginDto, @Res({ passthrough: true }) response: Response) {
+  async login(@Body() payload: LoginDto, @Res({ passthrough: true }) response: HeaderReply) {
     const result = await this.authService.login(payload);
-    response.cookie('wpcc_token', result.accessToken, {
+    response.header('Set-Cookie', serializeCookie('wpcc_token', result.accessToken, {
       httpOnly: true,
       secure: shouldUseSecureCookies(),
-      sameSite: 'lax',
+      sameSite: 'Lax',
       path: '/',
-      maxAge: 24 * 60 * 60 * 1000,
-    });
+      maxAge: 24 * 60 * 60,
+    }));
     return { user: result.user };
   }
 
   @Post('logout')
-  logout(@Res({ passthrough: true }) response: Response) {
-    response.clearCookie('wpcc_token', {
+  logout(@Res({ passthrough: true }) response: HeaderReply) {
+    response.header('Set-Cookie', serializeCookie('wpcc_token', '', {
       httpOnly: true,
       secure: shouldUseSecureCookies(),
-      sameSite: 'lax',
+      sameSite: 'Lax',
       path: '/',
-    });
+      maxAge: 0,
+    }));
     return { success: true };
   }
 
@@ -57,4 +61,27 @@ function shouldUseSecureCookies(): boolean {
     return process.env.COOKIE_SECURE === 'true';
   }
   return process.env.NODE_ENV === 'production';
+}
+
+function serializeCookie(
+  name: string,
+  value: string,
+  options: { httpOnly: boolean; secure: boolean; sameSite: 'Lax'; path: string; maxAge: number },
+): string {
+  const segments = [
+    `${name}=${encodeURIComponent(value)}`,
+    `Max-Age=${options.maxAge}`,
+    `Path=${options.path}`,
+    `SameSite=${options.sameSite}`,
+  ];
+
+  if (options.httpOnly) {
+    segments.push('HttpOnly');
+  }
+
+  if (options.secure) {
+    segments.push('Secure');
+  }
+
+  return segments.join('; ');
 }
