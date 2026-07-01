@@ -86,6 +86,9 @@ jobs:
       - name: Run Monorepo Build Verification
         run: npm run build:all
 
+      - name: Run WordPress Agent Tests
+        run: npm run test:agent
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

@@ -12,7 +12,8 @@
     "build:all": "npm run build -w packages/shared && npm run build -w packages/database && npm run build -w apps/api && npm run build -w apps/web && npm run build -w apps/worker",
     "db:generate": "npm run generate -w packages/database",
     "db:migrate": "npm run migrate:dev -w packages/database",
-    "db:seed": "npm run seed -w packages/database"
+    "db:seed": "npm run seed -w packages/database",
+    "test:agent": "node --test \"wordpress-agent/test/**/*.test.js\""
   },
   "overrides": {
     "lodash": "^4.18.1"
